@@ -1,0 +1,67 @@
+     1	package net.dougharris.utility.stakmods;
+     2	
+     3	import net.dougharris.utility.PacketInputStream;
+     4	import net.dougharris.utility.DumpHex;
+     5	import java.io.IOException;
+     6	import java.io.EOFException;
+     7	
+     8	public class ARPProvider extends GenericProvider{
+     9	
+    10	//  private byte[] data;
+    11	  private int linkType;
+    12	  private int netType;
+    13	  private int linkLen;
+    14	  private int netLen;
+    15	  private int opCode;
+    16	  private byte[]sndLinkAddress;
+    17	  private byte[]sndNetAddress;
+    18	  private byte[]tgtLinkAddress;
+    19	  private byte[]tgtNetAddress;
+    20	
+    21	  public Provider parse(PacketInputStream i, int length, String parserTag) throws Exception{
+    22	    setLength(length);
+    23	    setTag(parserTag);
+    24	    headerLength=0;
+    25	    linkType = i.readUnsignedShort();headerLength+=2;
+    26	    netType  = i.readUnsignedShort();headerLength+=2;
+    27	    linkLen  = i.readUnsignedByte();headerLength+=1;
+    28	    netLen   = i.readUnsignedByte();headerLength+=1;
+    29	    opCode   = i.readUnsignedShort();headerLength+=2;
+    30	    sndLinkAddress = new byte[linkLen];headerLength+=linkLen;
+    31	    sndNetAddress = new byte[netLen];headerLength+=netLen;
+    32	    tgtLinkAddress = new byte[linkLen];headerLength+=linkLen;
+    33	    tgtNetAddress = new byte[netLen];headerLength+=netLen;
+    34	    i.readFully(sndLinkAddress);headerLength+=sndLinkAddress.length;
+    35	    i.readFully(sndNetAddress);headerLength+=sndNetAddress.length;
+    36	    i.readFully(tgtLinkAddress);headerLength+=tgtLinkAddress.length;
+    37	    i.readFully(tgtNetAddress);headerLength+=tgtNetAddress.length;
+    38	    setMessageLength(-1);
+    39	    setMessageTag(null);
+    40	    return this;
+    41	  }
+    42	
+    43	  public String providerReport(String type) throws Exception{
+    44	    StringBuffer b = new StringBuffer();
+    45	    b.append("opType:");
+    46	    b.append(opCode);
+    47	    b.append("\n");
+    48	    b.append("src-");
+    49	    b.append("(link:");
+    50	    b.append(DumpHex.separatedHexPrint(sndLinkAddress));
+    51	    b.append(" ");
+    52	    b.append("net");
+    53	    b.append(":");
+    54	    b.append(DumpHex.dottedDecimalPrint(sndNetAddress));
+    55	    b.append(")");
+    56	    b.append("\n");
+    57	    b.append("tgt-");
+    58	    b.append("(link:");
+    59	    b.append(DumpHex.separatedHexPrint(tgtLinkAddress));
+    60	    b.append(" ");
+    61	    b.append("net");
+    62	    b.append(":");
+    63	    b.append(DumpHex.dottedDecimalPrint(tgtNetAddress));
+    64	    b.append(")");
+    65	    return b.toString();
+    66	  }
+    67	}

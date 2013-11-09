@@ -1,0 +1,129 @@
+     1	package net.dougharris.utility.stakmods;
+     2	/**
+     3	 * It is worth your life to deal with all these encodings.
+     4	 * Start with RFC3551 Tables 4 and 5, pages 28 and 29.
+     5	 * Our capture example seems to have type 5, which is DVI4
+     6	 * which is audio type A, 8000Hz, one channel.
+     7	 * So we start off interpreting that, and use it as a base.
+     8	 *
+     9	 */
+    10	
+    11	import net.dougharris.utility.PacketInputStream;
+    12	import java.io.IOException;
+    13	import java.io.EOFException;
+    14	import net.dougharris.utility.DumpHex;
+    15	
+    16	public class RTPProvider extends GenericProvider{
+    17	  String parsedTag;
+    18	  String messageTag;
+    19	  int parsedLength;
+    20	  int headerLength;
+    21	  int vPadField;
+    22	  int version;
+    23	  int isPadded;
+    24	  int isMarked;
+    25	  int isExtended;
+    26	  int nCsrc;
+    27	  long ssrc;
+    28	  int pTypeField;
+    29	  int pMarked;
+    30	  int pType;
+    31	  int seqNbr;
+    32	  long tStamp;
+    33	  byte[] data;
+    34	  public Provider parse(PacketInputStream i, int length, String parserTag) throws Exception{
+    35	    setLength(length);
+    36	    setTag(parserTag);
+    37	    headerLength=0;
+    38	    /*
+    39	    The parse should establish messageTag
+    40	    The parse should establish headerLength
+    41	    The parse should establish messageLength
+    42	    */
+    43	    /*
+    44	     *
+    45	2 version
+    46	1 padded
+    47	1 extended
+    48	4  ncsrc
+    49	1 marked
+    50	7 payloadType
+    51	16 sequence
+    52	32 timeStamp
+    53	32 ssrc
+    54	     */
+    55	    vPadField=i.readUnsignedByte();headerLength+=1;
+    56	    version=(vPadField&0x000000c0)>>6;
+    57	    isPadded=(vPadField&0x00000020)>>5;
+    58	    isExtended=(vPadField&0x00000000)>>4;
+    59	    nCsrc=(vPadField&0x0000000f);
+    60	    pTypeField=i.readUnsignedByte();headerLength+=1;
+    61	    pMarked=(pTypeField&0x00000080)>>7;
+    62	    pType=pTypeField&0x0000007f;
+    63	    seqNbr=i.readUnsignedShort();headerLength+=2;
+    64	    tStamp=i.readUnsignedInt();headerLength+=4;
+    65	    ssrc=i.readUnsignedInt();headerLength+=4;//JDH
+    66	    data=new byte[i.available()];
+    67	    try{
+    68	      i.readFully(data);headerLength+=data.length;
+    69	    } catch(EOFException x){
+    70	      System.err.println("RTPProvider 70 -"+x);
+    71	    } catch(IOException x){
+    72	      System.err.println("RTPProvider 72 -"+x);
+    73	    } finally{
+    74	      messageLength=-1;
+    75	      messageTag=null;
+    76	      setMessageTag(messageTag);
+    77	      setMessageLength(messageLength);
+    78	      setLength(headerLength+messageLength);
+    79	      return this;
+    80	    }
+    81	  }
+    82	
+    83	  public String providerReport(String type) throws Exception{
+    84	 /*
+    85	  * Things have been arranged so this is BOL
+    86	  */
+    87	
+    88	    StringBuffer b=new StringBuffer();
+    89	    if (type.equals("drop")){
+    90	    } else
+    91	    if (type.equals("short")){
+    92	      b.append(" length ");
+    93	      b.append(data.length);
+    94	    } else
+    95	    if (type.equals("regular")){
+    96	      b.append("version:");
+    97	      b.append(version);
+    98	      b.append("\n");
+    99	      b.append("pMarked:");
+   100	      b.append(pMarked);
+   101	      b.append("\n");
+   102	      b.append("pType:");
+   103	      b.append(pType);
+   104	      b.append(" nCsrc:");
+   105	      b.append(nCsrc);
+   106	      b.append("\n");
+   107	      b.append("seqNbr:");
+   108	      b.append(seqNbr);
+   109	      b.append("\n");
+   110	      b.append("tStamp:");
+   111	      b.append(tStamp);
+   112	      b.append("\n");
+   113	      b.append("SSRC:");
+   114	      b.append(ssrc);
+   115	      b.append("\n");
+   116	      /*
+   117	      if (pType==5){
+   118	        i.readUnsignedShort();//predictValue
+   119	     	  i.readUnsignedByte();//stepIndex
+   120		      i.readUnsignedByte();//MBZ
+   121	      }
+   122	      */
+   123	      if((data!=null)&&(data.length!=0)){
+   124	       b.append(DumpHex.dumpBytes(data));
+   125	      }
+   126	    }
+   127	    return b.toString();
+   128	  }
+   129	}

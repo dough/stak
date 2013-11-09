@@ -1,0 +1,112 @@
+     1	package net.dougharris.utility.stakmods;
+     2	
+     3	import net.dougharris.utility.PacketInputStream;
+     4	import java.util.ArrayList;
+     5	import java.util.StringTokenizer;
+     6	import java.io.EOFException;
+     7	
+     8	public abstract class GenericProvider implements Provider{
+     9	  protected int length;      // learned from the delivering agent
+    10	  protected int parsedLength;      // learned from the delivering agent
+    11	  protected String tag=null; //learned from the delivering agent
+    12	  protected String parsedTag=null; //learned from the delivering agent
+    13	  protected int messageLength;       // learned from the parse
+    14	  //protected String messageTag=null; //learned from the parse
+    15	  protected String messageTag=null; //learned from the parse
+    16	  protected String truncated=null;
+    17	  protected String aborted=null;
+    18	  protected StringBuffer b;
+    19	  protected int headerLength;
+    20	
+    21	  public String parseKey(){
+    22	    String key=null;
+    23	    String providedTag=getTag();
+    24	    int sp;
+    25	    if (null!=providedTag){
+    26	      sp=providedTag.indexOf(":");
+    27	      if (sp == -1){
+    28	        sp=providedTag.length();
+    29	      }
+    30	      key= providedTag.substring(0,sp);
+    31	    }
+    32	    return key;
+    33	  }
+    34	
+    35	  static public ArrayList parseTags(String pTag){
+    36	    ArrayList l =  new ArrayList();
+    37	    StringTokenizer t= new StringTokenizer(pTag,":");
+    38	    while (t.hasMoreTokens()){
+    39	      l.add(t.nextToken());//JDH
+    40	    }
+    41	    l.trimToSize();
+    42	    return l;
+    43	  }
+    44	
+    45	  public void setLength(int l){
+    46	    this.length=l;
+    47	  }
+    48	
+    49	  public int getLength(){
+    50	    return length;
+    51	  }
+    52	
+    53	  public void setTag(String providedTag){
+    54	    this.tag=providedTag;
+    55	  }
+    56	
+    57	  public String getTag(){
+    58	    return tag;
+    59	  }
+    60	
+    61	  public void setMessageLength(int l){
+    62	    this.messageLength=l;
+    63	  }
+    64	
+    65	  public int getMessageLength(){
+    66	    return messageLength;
+    67	  }
+    68	
+    69	  public void setMessageTag(String p){
+    70	    this.messageTag=p;
+    71	  }
+    72	
+    73	  public String getMessageTag(){
+    74	    return messageTag;
+    75	  }
+    76	
+    77	  final public String toString(String type){
+    78	   StringBuffer b = new StringBuffer();
+    79	   StringBuffer report= new StringBuffer();
+    80	   try{
+    81	     b.append("PROVIDER:");
+    82	     b.append((String)(GenericProvider.parseTags(getTag())).get(0));
+    83	     b.append(" ");
+    84	     b.append("USER:");
+    85	String jdh="none";
+    86	if (null!=getMessageTag()){
+    87	   jdh=(String)(GenericProvider.parseTags(getMessageTag())).get(0);
+    88	     }
+    89		//JDHLOGSystem.err.println("key is "+jdh);
+    90	     b.append(jdh);
+    91	     if (null!=aborted){
+    92	       b.append("\n"+aborted);
+    93	     } else if (null!=truncated){
+    94	       b.append("\n"+truncated);
+    95	     }
+    96	//JDH should compare this int headerLength=getLength()-getMessageLength();
+    97	     b.append(" <"+headerLength+"+"+getMessageLength()+">\n");
+    98	     b.append(providerReport(type));
+    99	   } catch(Exception x){
+   100	     b.append("Ended by exception "+x.getClass().getName()+" "+x.getMessage());
+   101	   } finally{
+   102	     b.append("\n");
+   103	     return b.toString();
+   104	   }
+   105	  }
+   106	
+   107	  public String providerReport(String type) throws Exception{
+   108	    StringBuffer b = new StringBuffer();
+   109	    b.append("   --- <<< GenericProvider >>> ---");
+   110	    return b.toString();
+   111	  }
+   112	}

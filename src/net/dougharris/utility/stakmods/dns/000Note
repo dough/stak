@@ -1,0 +1,5 @@
+RFC1035 has some debugging code still in 
+and it needs some attention as far as short reads 
+Of course they all need short read work 
+and perhaps we need an overall plan for short reads 
+we do not always know how big a packet to expect 

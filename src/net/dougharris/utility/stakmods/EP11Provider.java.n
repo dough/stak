@@ -1,0 +1,138 @@
+     1	package net.dougharris.utility.stakmods;
+     2	
+     3	import net.dougharris.utility.PacketInputStream;
+     4	import net.dougharris.utility.DumpHex;
+     5	import java.io.IOException;
+     6	import java.io.EOFException;
+     7	
+     8	public class EP11Provider extends GenericProvider{
+     9		/*
+    10	/* Be very very careful about littleEndian/bigEndian
+    11	 * Apparently IEEE uses littleEndian in headers when they are sent
+    12	 * so when reading shorts or ints they have to be read as littleEndian
+    13	 * even if we are using bigEndian (network byte order) for everything else
+    14	 * Yyeccchhhh!
+    15	 */
+    16	static private int cn=0;//JDH
+    17	  private int controlField;
+    18	  private int version;
+    19	  private int fieldType;
+    20	  private int subType;
+    21	  private int flagField;
+    22	  private int durationField;
+    23	  private byte[] addr1 = new byte[6];   
+    24	  private byte[] addr2 = new byte[6];   
+    25	  private byte[] addr3 = new byte[6];   
+    26	  private byte[] addr4 = new byte[6];   
+    27	  private int sqCtl;
+    28	  private int etherType;
+    29	  private int dsap;
+    30	  private int ssap;
+    31	  private int snapCtl;
+    32	  private byte[] ctlBytes = new byte[3];   
+    33	
+    34	  public Provider parse(PacketInputStream i, int length, String parserTag) throws Exception{
+    35	    setLength(length);
+    36	    setTag(parserTag);
+    37	    headerLength=0;
+    38	    controlField = i.readUnsignedShort();headerLength+=2;
+    39	    /*
+    40	     * Because I am using an int to hold it the mask must be 32 bits
+    41	     * We only use the right 16 bits of the int however
+    42	     */
+    43	    flagField  = (controlField&0x000000ff);
+    44	    version = (controlField&0x00000300)>>8;
+    45	    fieldType = (controlField&0x00000c00)>>10;
+    46	    subType = (controlField&0x0000f000)>>12;
+    47	
+    48	    durationField = i.readUnsignedShort();headerLength+=2;
+    49	    parsedTag="raw";
+    50	    if (!(fieldType==2)){
+    51		    /*
+    52		     * For now do nothing if it is not data
+    53		     */
+    54	    } else {
+    55	if (subType==0){
+    56	      i.readFully(addr1);headerLength+=addr1.length;
+    57	      i.readFully(addr2);headerLength+=addr2.length;
+    58	      i.readFully(addr3);headerLength+=addr3.length;
+    59	      sqCtl = i.readUnsignedShort();headerLength+=2;
+    60	      dsap=i.readUnsignedByte();headerLength+=1;
+    61	      ssap=i.readUnsignedByte();headerLength+=1;
+    62	      snapCtl = i.readUnsignedByte();headerLength+=1;
+    63	      byte[] ctlBytes = new byte[3];
+    64	      i.readFully(ctlBytes);headerLength+=ctlBytes.length;
+    65	      etherType=i.readUnsignedShort();headerLength+=2;
+    66	      if (etherType == 2048){
+    67	        parsedTag="ip";
+    68	      } else if (etherType == 2054){
+    69	        parsedTag="arp";
+    70	      } else if (etherType == 33079){
+    71	        parsedTag="IPX";
+    72	      } else {
+    73	        parsedTag="raw";
+    74	      }
+    75	}
+    76	    }
+    77	    setMessageLength(getLength()-headerLength);
+    78	    setMessageTag(parsedTag);
+    79	    return this;
+    80	  } 
+    81	
+    82	  public String providerReport(String type) throws Exception{
+    83	    StringBuffer b = new StringBuffer();
+    84	    if (type.equals("drop")){
+    85	    } else {
+    86	      if (type.equals("short")){
+    87	        b.append("Passed through EP11 on the way to raw");
+    88	      } else {
+    89	        if (type.equals("regular")){
+    90	          b.append("Showing the controlfield:");//JDH
+    91	          b.append(DumpHex.shortPrint((short)controlField));
+    92	          b.append("  Capture ");
+    93	          b.append(cn++);
+    94	          b.append("\n");
+    95	          b.append("type:"+fieldType);
+    96	          b.append(" ");
+    97	          b.append("subtype:");
+    98	          b.append(subType);
+    99	          b.append(" ");
+   100	          b.append("flags:");
+   101	          b.append(DumpHex.shortPrint((short)flagField));
+   102	          b.append(" ");
+   103	          b.append("duration:");
+   104	          b.append(durationField);
+   105	          //JDHb.append("\n");
+   106		  if ((fieldType==2)&&(subType==0)){
+   107	            b.append(DumpHex.bytesPrint(addr1));
+   108	            b.append(" ");
+   109	            b.append(DumpHex.bytesPrint(addr2));
+   110	            b.append(" ");
+   111	            b.append(DumpHex.bytesPrint(addr3));
+   112	            b.append(" ");
+   113		    b.append(DumpHex.hexPrintShort(sqCtl));
+   114	            b.append(" ");
+   115	            b.append("ssap/dsap:");
+   116		    b.append(ssap);
+   117	            b.append("/");
+   118		    b.append(dsap);
+   119	            b.append(" ");
+   120	            b.append("ctlBytes:");
+   121	            b.append(DumpHex.bytesPrint(ctlBytes));
+   122	            b.append(" ");
+   123	            b.append("etherType:");
+   124		    b.append(DumpHex.hexPrintShort(etherType));
+   125		  }
+   126	        }
+   127	      }
+   128	    }
+   129	    b.append("\n");
+   130	    return b.toString();
+   131	  }
+   132	  /*
+   133	  class AssociationRequest{
+   134	  2  2   6  6  6   2  2   2    var  var
+   135	  fc|dur|da|sa|bss|sc|cap|lint|ssid|rates|
+   136	  }
+   137	  */
+   138	}

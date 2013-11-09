@@ -1,0 +1,119 @@
+     1	package net.dougharris.utility.stakmods;
+     2	
+     3	import net.dougharris.utility.PacketInputStream;
+     4	import net.dougharris.utility.DumpHex;
+     5	import java.io.IOException;
+     6	import java.io.EOFException;
+     7	
+     8	public class IPProvider extends GenericProvider{
+     9	  private int vers;
+    10	  public  int hlen;
+    11	  private int tos;
+    12	  private int totalLength;
+    13	  private int id;
+    14	  private int flagfrag;
+    15	  private int flag;
+    16	  private int frag;
+    17	  private boolean df;
+    18	  private boolean mf;
+    19	  private int ttl;
+    20	  public int prot;
+    21	  private int cksum;
+    22	  private byte[] src = new byte[4];
+    23	  private byte[] dst = new byte[4];
+    24	private int nAvailable;
+    25	  public Provider
+    26	    parse(PacketInputStream i, int length, String parserTag) throws Exception{
+    27	nAvailable=i.available();//JDH
+    28	    setLength(length);
+    29	    setTag(parserTag);
+    30	    headerLength=0;
+    31	    int verhlen=(byte)i.readUnsignedByte();headerLength+=1;
+    32	    vers = (verhlen&0x000000f0)>>4;
+    33	    hlen = (verhlen&0x0000000f)*4;
+    34	    tos=(byte)i.readUnsignedByte();headerLength+=1;
+    35	    parsedLength=(short)i.readUnsignedShort();headerLength+=2;
+    36	    id=i.readUnsignedShort();headerLength+=2;
+    37	    flagfrag=i.readUnsignedShort();headerLength+=2;
+    38	    ttl=i.readUnsignedByte();headerLength+=1;
+    39	    prot=i.readUnsignedByte();headerLength+=1;
+    40	    cksum=i.readUnsignedShort();headerLength+=2;
+    41	    i.readFully(src);headerLength+=src.length;
+    42	    i.readFully(dst);headerLength+=dst.length;
+    43	//getMessageLength may be wrong - DIX Ethernet does not know how long it is!
+    44	    setLength(parsedLength);
+    45	    frag = flagfrag&0x00001fff;
+    46	    flag = flagfrag&0x0000e000>>13;
+    47	    df = (2==(flag&2));
+    48	    mf = (1==(flag&1));
+    49	    String pSrc=DumpHex.bytesPrint(src);
+    50	    String pDst=DumpHex.bytesPrint(dst);
+    51	    /**
+    52	     * Here is where we begin pulling off the numbers
+    53	     * This one has the value prot which tells the type
+    54	     * tag type-from-parse type-stak
+    55	     * icmp 1
+    56	     * igmp 2
+    57	     * tcp 6
+    58	     * udp 17
+    59	     */
+    60	    if (prot == 1){
+    61	      parsedTag="icmp";
+    62	    } else if (prot == 2){
+    63	      parsedTag="igmp";
+    64	    } else if (prot == 6){
+    65	      parsedTag="tcp";
+    66	    } else if (prot == 17){
+    67	      if (mf || (frag >0)){
+    68	      // no UDP header on the fragment
+    69	        parsedTag="raw udp";
+    70	      } else {
+    71	        parsedTag="udp";
+    72	      }
+    73	    } else {
+    74	      parsedTag="raw";
+    75	    }
+    76	    String messageTag = parsedTag+":"+pSrc+":"+pDst;
+    77	    setMessageTag(messageTag);
+    78	    setMessageLength(getLength()-headerLength);
+    79	    return this;
+    80	  }
+    81	
+    82	  public String providerReport(String type) throws Exception{
+    83	    StringBuffer b=new StringBuffer();
+    84	b.append("Available bytes:");
+    85	b.append(nAvailable);
+    86	b.append("\n");
+    87	    b.append(vers);
+    88	    b.append("   ");
+    89	    b.append(" src:");
+    90	    b.append(DumpHex.dottedDecimalPrint(src));
+    91	    b.append(" dst:");
+    92	    b.append(DumpHex.dottedDecimalPrint(dst));
+    93	    b.append("   ");
+    94	    b.append("hlen:");
+    95	    b.append(hlen);
+    96	    b.append(" len:");
+    97	    //JDH replaced this b.append(getLength());
+    98	    //JDH maybe it should be parsedLength
+    99	   // b.append(getMessageLength());
+   100	    b.append(parsedLength-hlen);
+   101	    b.append(" tos:");
+   102	    b.append(tos);
+   103	    b.append(" id:");
+   104	    b.append(id);
+   105	    if (df) b.append(" DF ");
+   106	    if (mf) b.append(" MF");
+   107	    if ((frag>0)||mf){
+   108	      b.append("\nFrag:");
+   109	      b.append(frag);
+   110	    }
+   111	    b.append(" ttl:");
+   112	    b.append(ttl);
+   113	    b.append(" protocol:");
+   114	    b.append(prot);
+   115	    b.append(" CheckSum:");
+   116	    b.append(DumpHex.shortPrint((short)cksum));
+   117	    return b.toString();
+   118	  }
+   119	}

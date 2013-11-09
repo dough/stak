@@ -1,0 +1,39 @@
+     1	package net.dougharris.utility.stakmods;
+     2	
+     3	import net.dougharris.utility.PacketInputStream;
+     4	import net.dougharris.utility.DumpHex;
+     5	import java.io.IOException;
+     6	import java.io.EOFException;
+     7	
+     8	public class EPPrismProvider extends GenericProvider{
+     9	  private byte[] prismHeader = new byte[144];
+    10	
+    11	  public Provider parse(PacketInputStream i, int length, String parserTag) throws Exception{
+    12	    setLength(length);
+    13	    setTag(parserTag);
+    14	    headerLength=0;
+    15	    i.readFully(prismHeader);headerLength+=prismHeader.length;
+    16	    setMessageLength(getLength()-headerLength);
+    17	    setMessageTag("ether11");
+    18	    return this;
+    19	  } 
+    20	
+    21	  public String providerReport(String type) throws Exception{
+    22	    StringBuffer b = new StringBuffer();
+    23	    if (type.equals("drop")){
+    24	    }
+    25	    else
+    26	    if (type.equals("short")){
+    27	      b.append("Prism Header: ");
+    28	      b.append("144 bytes");
+    29	    }
+    30	    else
+    31	    if (type.equals("regular")){
+    32	      if((prismHeader!=null)&&(prismHeader.length!=0)){
+    33	        b.append(DumpHex.dumpBytes(prismHeader));
+    34	      }
+    35	    }
+    36	    b.append("\n");
+    37	    return b.toString();
+    38	  }
+    39	}

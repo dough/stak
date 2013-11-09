@@ -1,0 +1,751 @@
+     1	package net.dougharris.utility;
+     2	/** @ (#)P 1.01 02/01/2003
+     3	  * Copyright 2002 Keep It Simple Advice, all rights reserved
+     4	  */
+     5	
+     6	import java.util.Map;
+     7	import java.util.Random;
+     8	import java.util.HashMap;
+     9	import java.util.Iterator;
+    10	import java.util.logging.Logger;
+    11	import java.util.logging.Formatter;
+    12	import java.util.logging.Level;
+    13	import java.util.logging.Handler;
+    14	import java.util.logging.FileHandler;
+    15	import java.util.logging.LogRecord;
+    16	import java.io.IOException;
+    17	
+    18	/** 
+    19	  * <pre><code>
+    20	  * A class used for handling command line arguments, errors, printing,
+    21	  * and other tasks common in any program.  An instance of it extends
+    22	  * HashMap, and is created in a program very early on, providing
+    23	  * information about both command line arguments provided, and command
+    24	  * line arguments expected, classified as flags, properties, and parameters.
+    25	  * These are defined in the "original Unix" style.
+    26	  * 
+    27	  * You tell it to parse the arguments with the function P.arseArgs(...),
+    28	  * which takes an "option" string and an "arguments" string.
+    29	  * 
+    30	  * A flag is an argument like "-a", with a single letter after a hyphen,
+    31	  * and is intended to act like a boolean saying whether to follow a
+    32	  * particular behavior, or not.
+    33	  *
+    34	  * A property is an argument like "-p SOMEVALUE", which starts with a 
+    35	  * a flag-like argument and treats the following argument as a value,
+    36	  * so in that sense can be thought of as "setting a property" in your
+    37	  * program.
+    38	  *
+    39	  * A parameter is just a single string argument that is not a flag.
+    40	  * It typically represents the name of some file that your program
+    41	  * will operate upon.
+    42	  *
+    43	  * The option string specified with P.arseArgs(...) describes
+    44	  * the flags and properties that might be expected, stating for each
+    45	  * whether it is optional or required.  It is expected that flags and
+    46	  * properties are specified first on the command line, and parameters
+    47	  * are anything left over.
+    48	  *
+    49	  * Thus the args "-z +a -v SomeValue -u Another Value this that the other
+    50	  * has two flags, two properties, and four parameters.
+    51	  *
+    52	  * The option string "-z+a.v_u" states that -z is an optional flag,
+    53	  * -a is a required flag (which some would think is unneeded, but it
+    54	  * can be useful), -v is a property (so the next argument is its value),
+    55	  * which must be present, and -u is a property which is optional.
+    56	  *
+    57	  * The argument "--" on the command line turns off this parsing, so
+    58	  * everything that follows is a parameter.
+    59	  *
+    60	  * P.arseArgs() can also be called with an additional "usage" string
+    61	  * which describes the message that should be printed if there is a
+    62	  * problem in parsing arguments.
+    63	  *
+    64	  * There is also an assortment of P.rint(...) and P.rintln(...)
+    65	  * functions that this author has found useful, and perhaps more
+    66	  * helpful there is an assortment of (...), P.error(...),
+    67	  * and P.exit(...) routines that create specific printouts and
+    68	  * actions when desired.
+    69	  * 
+    70	  * It is intended in the next version of this program (due "real soon
+    71	  * now") to provide hooks into the JDK1.4 logging routines.</pre>
+    72	  * version 1.1 does this
+    73	  * </code></pre>
+    74	  * 
+    75	  * @author  Douglas Harris
+    76	  * @version 1.1
+    77	  */
+    78	
+    79	public class P extends java.util.HashMap{
+    80	  private static long startTime=System.currentTimeMillis();
+    81	  private static Random random = new Random();
+    82	  public Logger logger;
+    83	  private Handler handler;
+    84	  private Level defaultLogLevel = Level.ALL;
+    85	  private String state;
+    86	  
+    87	  public P(){
+    88	    logger = Logger.getLogger("");
+    89	    logger.setLevel(defaultLogLevel);
+    90	    handler = logger.getHandlers()[0];
+    91	    handler.setLevel(defaultLogLevel);
+    92	    handler.setFormatter(new PFormatter());
+    93	  }
+    94	
+    95	/**
+    96	  *  just delegate to this logger most of the time, refine it later
+    97	  */
+    98	  public void setDefaultLogLevel(Level level){
+    99	    this.defaultLogLevel=level;
+   100	    logger.setLevel(defaultLogLevel);
+   101	  }
+   102	  public void setLogLevel(Level level){
+   103	    logger.setLevel(level);
+   104	    handler.setLevel(level);
+   105	  }
+   106	
+   107	  public void setLogFile(String fileName){
+   108	    Handler fileHandler;
+   109	    try{
+   110	      fileHandler=new FileHandler(fileName);
+   111	      fileHandler.setFormatter (handler.getFormatter());
+   112	      fileHandler.setLevel(handler.getLevel());
+   113	      logger.addHandler(fileHandler);   
+   114	      handler.setLevel(Level.OFF);
+   115	    }catch(IOException x){
+   116	    }
+   117	  }
+   118	
+   119	/**
+   120	  *  just delegate to this logger most of the time, refine it later
+   121	  */
+   122	  public void log(String msg){
+   123	    logger.log(defaultLogLevel, msg);
+   124	  }
+   125	
+   126	  public void log(Level level, String msg){
+   127	    logger.log(level, msg);
+   128	  }
+   129	
+   130	  public void severe(String msg){
+   131	    logger.severe(msg);
+   132	  }
+   133	
+   134	  public void warning(String msg){
+   135	    logger.warning(msg);
+   136	  }
+   137	
+   138	  public void config(String msg){
+   139	    logger.config(msg);
+   140	  }
+   141	
+   142	  public void info(String msg){
+   143	    logger.info(msg);
+   144	  }
+   145	
+   146	  public void fine(String msg){
+   147	    logger.fine(msg);
+   148	  }
+   149	
+   150	  public void finer(String msg){
+   151	    logger.finer(msg);
+   152	  }
+   153	
+   154	  public void finest(String msg){
+   155	    logger.finest(msg);
+   156	  }
+   157	
+   158	  public String getState(){
+   159	    return state;
+   160	  }
+   161	
+   162	  public void setState(String state){
+   163	    this.state=state;
+   164	  }
+   165	
+   166	/**
+   167	  *
+   168	  */
+   169	  static public void rint(boolean b, boolean yes){
+   170	   if (yes)rint(b);
+   171	  }
+   172	  static public void rint(boolean b){
+   173	    System.out.print(b);
+   174	  }
+   175	
+   176	/**
+   177	  *
+   178	  */
+   179	  static public void rintln(boolean b, boolean yes){
+   180	   if (yes)rintln(b);
+   181	  }
+   182	  static public void rintln(boolean b){
+   183	    rint(b);
+   184	    rintln();
+   185	  }
+   186	
+   187	/**
+   188	  *
+   189	  */
+   190	  static public void rint(char c, boolean yes){
+   191	   if (yes)rint(c);
+   192	  }
+   193	  static public void rint(char c){
+   194	    System.out.print(c);
+   195	  }
+   196	
+   197	/**
+   198	  * JDH problem here, I have this defined for printing a boolean!
+   199	  */
+   200	  /*
+   201	  static public void rintln(boolean yes){
+   202	   if (yes)rintln();
+   203	  }
+   204	  */
+   205	  static public void rintln(){
+   206	    rint('\n');
+   207	  }
+   208	
+   209	/**
+   210	  *
+   211	  */
+   212	  static public void rint(long n, boolean yes){
+   213	    if (yes)rint(n);
+   214	  }
+   215	  static public void rint(long n){
+   216	    System.out.print(""+n);
+   217	  }
+   218	  
+   219	/**
+   220	  *
+   221	  */
+   222	  static public void rintln(long n, boolean yes){
+   223	    if (yes)rintln(n);
+   224	  }
+   225	  static public void rintln(long n){
+   226	    rint(n);
+   227	    rintln();
+   228	  }
+   229	
+   230	/**
+   231	  *
+   232	  */
+   233	  static public void rint(Object o, boolean yes){
+   234	    if (yes) rint(o);
+   235	  }
+   236	  static public void rint(Object o){
+   237	    System.out.print(o.toString());
+   238	  }
+   239	
+   240	/**
+   241	  *
+   242	  */
+   243	  static public void rintln(Object o, boolean yes){
+   244	    if (yes) rintln(o);
+   245	  }
+   246	  static public void rintln(Object o){
+   247	    rint(o);
+   248	    rintln();
+   249	  }
+   250	
+   251	/**
+   252	  *
+   253	  */
+   254	  static public void rintln(Object[] o, boolean yes){
+   255	    if (yes) rintln(o);
+   256	  }
+   257	  static public void rintln(Object[] a){
+   258	    for (int j=0;j<a.length;j++){
+   259	      rintln(a[j]);
+   260	    }
+   261	  }
+   262	
+   263	
+   264	/**
+   265	  *
+   266	  */
+   267	  static public void error(Object o){
+   268	    System.err.println(o.toString());
+   269	  }
+   270	
+   271	/**
+   272	  * Prints name of exception and its message
+   273	  */
+   274	  static public void exception(Exception x){
+   275	    error(x.getClass().getName()+ " says " + x.getMessage());
+   276	  }
+   277	
+   278	/**
+   279	  * Prints user message, then exception and message
+   280	  */
+   281	  static public void exception(String s, Exception x){
+   282	    rint(s+": ");
+   283	    exception(x);
+   284	  }
+   285	
+   286	/**
+   287	  * Prints name of exception and message, then exits with a code
+   288	  */
+   289	  static public void exception(Exception x, int code){
+   290	    exception(x);
+   291	    System.exit(code);
+   292	  }
+   293	
+   294	/**
+   295	  * Prints user message, then exception and message, then exits with a code
+   296	  */
+   297	  static public void exception(String s,Exception x, int code){
+   298	    exception(s, x);
+   299	    P.exit(code);
+   300	  }
+   301	
+   302	/**
+   303	  * Exits with code 0
+   304	  */
+   305	  static public void exit(){
+   306	    exit(0);
+   307	  }
+   308	
+   309	/**
+   310	  * Exits with specified code
+   311	  */
+   312	  static public void exit(int code){
+   313	    System.exit(code);
+   314	  }
+   315	
+   316	/**
+   317	  * Exits
+   318	  */
+   319	  static public void exit(Exception x){
+   320	    exit(x, 1);
+   321	  }
+   322	
+   323	/**
+   324	  * Prints exception name and message, the exits with a code
+   325	  */
+   326	  static public void exit(Exception x, int code){
+   327	    if (null!=x){
+   328	      exception(x);
+   329	    }
+   330	    exit(code);
+   331	  }
+   332	
+   333	/**
+   334	 *  Timing code
+   335	    long t = -P.now();
+   336	    t     += P.now();
+   337	 */
+   338	  static public long now(){
+   339	    return System.currentTimeMillis();
+   340	  }
+   341	/**
+   342	  * Pauses the thread in which it is called for a time specified in ms
+   343	  */
+   344	  static public void ause(long delay){
+   345	    if (delay>0){
+   346	      long doneTime=System.currentTimeMillis()+delay;
+   347	      long sleepTime;
+   348	      while(0<(sleepTime=doneTime-System.currentTimeMillis())){
+   349	      try{
+   350	        Thread.currentThread().sleep(sleepTime);
+   351	      } catch(java.lang.InterruptedException x){
+   352	      }
+   353	      }
+   354	    }
+   355	  }
+   356	
+   357	  static public void ause(long minDelay, long varDelay ){
+   358	    if (0==varDelay){
+   359	      ause(minDelay);
+   360	    } else {
+   361	      int randomDelay=random.nextInt((int)varDelay);
+   362	      try{
+   363	        Thread.currentThread().sleep(minDelay+randomDelay);
+   364	      } catch(java.lang.InterruptedException x){
+   365	      }
+   366	    }
+   367	  }
+   368	
+   369	  HashMap markTable = new HashMap();
+   370	
+   371	  static public long mark(){
+   372	    return System.currentTimeMillis();
+   373	  }
+   374	
+   375	  static public long markTime(long start){
+   376	    return System.currentTimeMillis()-start;
+   377	  }
+   378	
+   379	  public long mark(String name){
+   380	    long result = System.currentTimeMillis();
+   381	    markTable.put(name, new Long(result));
+   382	    return result;
+   383	  }
+   384	
+   385	/**
+   386	  I have to think over the Exception here - maybe something better
+   387	  negative will not work, since you could get negative anyway!
+   388	  I take that back, you cannot get negative, since you cannot run
+   389	  markTime on a name until you have run mark for it.
+   390	  So a negative value is good.
+   391	  */
+   392	  public long markTime(String name){
+   393	    Long storedValue=(Long)markTable.get(name);
+   394	    if (null==storedValue) return -1;
+   395	    return System.currentTimeMillis()-storedValue.longValue();
+   396	  }
+   397	
+   398	  public void markOut(String name){
+   399	    markTable.remove(name);
+   400	  }
+   401	
+   402	/**
+   403	  * Prints the given usage message.
+   404	  */
+   405	  static public void usage(String usage){
+   406	    rint("Usage: ");
+   407	    rintln(usage);
+   408	    exit(1);
+   409	  }
+   410	
+   411	/**
+   412	  * Prints the given  error message, then the given usage message
+   413	  */
+   414	  static public void usage(String error, String usage){
+   415	    rintln(error);
+   416	    rintln("Usage: "+usage);
+   417	    exit(1);
+   418	  }
+   419	
+   420	
+   421	/**
+   422	  * This is the major routine, which should be called early in
+   423	  * your program.  It creates an instance of this class, to
+   424	  * hold the information from parsing, and then does the parse.
+   425	  * The options argument shows what flags and properties to expect.
+   426	  * The args array shows the arguments to parse, which would
+   427	  * normally be all arguments given on the command line.
+   428	  * 
+   429	  * When called in this way, the program will continue even if
+   430	  * errors are found in the options, and will let the user test
+   431	  * for a particular option, and obtain all parameters.
+   432	  * 
+   433	  * If it is desired to fail when errors are found, use the form
+   434	  * of this call that provides a usage String.
+   435	  */
+   436	  static public P arseArgs(String[] args){
+   437	    return arseArgs("",args);
+   438	  }
+   439	  static public P arseArgs(String options, String[] args){
+   440	    return (new P()).parse(options, args);
+   441	  }
+   442	
+   443	/**
+   444	  * This is the major routine, which should be called early in
+   445	  * your program.  It creates an instance of this class, to
+   446	  * hold the information from parsing, and then does the parse.
+   447	  * The options argument shows what flags and properties to expect.
+   448	  * It also provides a usage message to be shown if the parse fails.
+   449	  * The args array shows the arguments to parse, which would
+   450	  * normally be all arguments given on the command line.
+   451	  *
+   452	  * Called in this form if there is an error in the options
+   453	  * the program will exit with code a, printing the usage String.
+   454	  */
+   455	  static public P arseArgs(String options, String[] args, String usage){
+   456	    P p = (new P()).parse(options, args);
+   457	    if (0!= p.getErrors().length()){
+   458	      P.rintln(p.getErrors());
+   459	      P.usage(usage);
+   460	    }
+   461	    return p;
+   462	  }
+   463	/**
+   464	 *  This is used to construct instances from a className string
+   465	 */
+   466	  static public Object getInstance(String className){
+   467	    Object result = null;
+   468	      try{
+   469	        result= Class.forName(className).newInstance();
+   470	      } catch(ClassNotFoundException x){
+   471	         P.exception(x);
+   472	      } catch(InstantiationException x){
+   473	         P.exception(x);
+   474	      } catch(IllegalAccessException x){
+   475	         P.exception(x);
+   476	      }
+   477	      return result;
+   478	    }
+   479	/*
+   480	  ================================================================
+   481	  The methods above are basically static utility methods
+   482	  The methods below deal with this instance and its variables
+   483	  ================================================================
+   484	*/
+   485	
+   486	/**
+   487	  * After arseArgs(...) has been run, lets you ask if a particular
+   488	  * flag was specified as an argument.
+   489	  */
+   490	  public boolean getFlag(String flag){
+   491	    return null != this.get(flag);
+   492	  }
+   493	
+   494	/**
+   495	  * After arseARgs(...) has been run, lets you retrieve the value
+   496	  * of a particular property, returning null if that property
+   497	  * was not specified as an argument.
+   498	  */
+   499	  public String getProperty(String flag){
+   500	    return (String)this.get(flag);
+   501	  }
+   502	
+   503	  public String getProperty(String flag, String defaultValue){
+   504	    String result;
+   505	    result = (String)this.get(flag);
+   506	    if (null==result){
+   507	      result=defaultValue;
+   508	    }
+   509	    return result;
+   510	  }
+   511	
+   512	  public int getIntProperty(String flag){
+   513	    return getIntProperty(flag, -1);
+   514	  }
+   515	
+   516	  public int getIntProperty(String flag, int defaultValue){
+   517	    int result = defaultValue;
+   518	    String value = (String)this.get(flag);
+   519	    if (null!=value){
+   520	      result=Integer.parseInt((String)this.get(flag));
+   521	    }
+   522	    return result;
+   523	  }
+   524	
+   525	/**
+   526	  * After arseArgs(...) has been run, lets you retrieve the
+   527	  * arguments that are to be treated as parameters.
+   528	  * It returns a String array whose length tells how many
+   529	  * parameters are present, including 0 length if none are present.
+   530	  */
+   531	  public String[] getParams(){ //OK
+   532	    return (String[])this.get(" ");
+   533	  }
+   534	
+   535	  public String getParamsAsString(){ //OK
+   536	    StringBuffer b = new StringBuffer();
+   537	    String[] params = getParams();
+   538	    for (int j = 0; j< params.length; j++){
+   539	      b.append(params[j]);
+   540	      b.append(" ");
+   541	    }
+   542	    return b.toString();
+   543	  }
+   544	
+   545	/**
+   546	  * After arseArgs(...) has been run, tells the details of
+   547	  * any parsing errors.  Returns null if there were no errors.
+   548	  */
+   549	  public String getErrors(){
+   550	    return (String)this.get("*");
+   551	  }
+   552	
+   553	/**
+   554	  * The actual routing to parse arguments, called by arseArgs(...).
+   555	  */
+   556	  protected P parse(String options, String[] args){
+   557	    // a- means optional flag
+   558	    // a+ means required flag
+   559	    // a_ means optional property, must be followed by a value
+   560	    // a. means required property, must be followed by a value
+   561	    HashMap cmdFlags = new HashMap();
+   562	    String flag;
+   563	    String nextFlag=null;
+   564	    StringBuffer errors=new StringBuffer();
+   565	    /**
+   566	      First go through options to see what should be in args
+   567	    */
+   568	    for(int which=0;which<options.length();which++){
+   569	      flag = "-"+options.substring(which,which+1);
+   570	      if(which+1<options.length()){
+   571	        nextFlag=options.substring(which+1,which+2);
+   572	        if (nextFlag.equals("-")){
+   573	          cmdFlags.put(flag,nextFlag);
+   574	        } else
+   575	        if (nextFlag.equals("+")){
+   576	          cmdFlags.put(flag,nextFlag);
+   577	          /*
+   578	            mark that it is required
+   579	            if found this will be overwritten by -
+   580	          */
+   581	          this.put(flag,nextFlag);
+   582	        } else
+   583	        if (nextFlag.equals("_")){
+   584	          cmdFlags.put(flag,nextFlag);
+   585	        } else
+   586	        if (nextFlag.equals(".")){
+   587	          cmdFlags.put(flag," "); //JDH changed this from ":"
+   588	          /*
+   589	            mark that it is required using " "
+   590		    so it cannot be the same as a value.
+   591	            if found this will be overwritten by the value.
+   592	          */
+   593	          this.put(flag," "); // mark that it is required
+   594	        } else {
+   595	          System.out.println("Bad symbol "+nextFlag+"in option string");
+   596	        }
+   597	        which++;
+   598	      } else {
+   599	        System.out.println("Missing symbol in option string at "+which);
+   600	      }
+   601	    }
+   602	
+   603	    int arg=0;
+   604	    for(;arg<args.length;arg++){
+   605	      if (!args[arg].startsWith("-")){
+   606	        break;
+   607	      }
+   608	      flag = args[arg];
+   609	      /*
+   610	        This should tell it to quit looking for flags or options
+   611	      */
+   612	      if (flag.equals("--")){
+   613	        arg++;
+   614	        break;
+   615	      }
+   616	      if (!(cmdFlags.containsKey(flag))){
+   617	        errors.append("\nbad flag "+flag);
+   618	        continue;
+   619	      }
+   620	      if (((String)cmdFlags.get(flag)).equals("-")){
+   621	      this.put(flag,"-");
+   622	        continue;
+   623	      }
+   624	      if (((String)cmdFlags.get(flag)).equals("+")){
+   625	      this.put(flag,"-");// turns off the + because it was found
+   626	        continue;
+   627	      }
+   628	      if (!(arg+1<args.length)){
+   629	        errors.append("\nMissing value for "+flag);
+   630	        continue;
+   631	      }
+   632	      arg++;
+   633	      this.put(flag,args[arg]);
+   634	    }
+   635	    String[] params=null;
+   636	    params = new String[args.length - arg];
+   637	
+   638	    int n=0;
+   639	    // reverse these so they come back in the right order!
+   640	    for(;arg<args.length;arg++){
+   641	      params[n++] = args[arg];
+   642	    }
+   643	    Iterator k = null;
+   644	    Map.Entry e = null;
+   645	    if (this.containsValue("+")){
+   646	      // can iterate through to see which ones
+   647	      k = this.entrySet().iterator();
+   648	      while (k.hasNext()){
+   649	        if ("+".equals((String)(e=(Map.Entry)k.next()).getValue())){
+   650	          errors.append("\nThe required flag "+(String)e.getKey()+" was not supplied.");
+   651	        };
+   652	      }
+   653	    } 
+   654	    /*
+   655	      Should change this to " " in accordance with remark above
+   656	    */
+   657	      //JDH changed to " " from ":" in both spots below
+   658	    if (this.containsValue(" ")){
+   659	      // can iterate through to see which ones
+   660	      k = this.entrySet().iterator();
+   661	      while (k.hasNext()){
+   662	        if (" ".equals((String)(e=(Map.Entry)k.next()).getValue())){
+   663	          errors.append("\nThe required property "+(String)e.getKey()+" was not supplied.");
+   664	        }
+   665	      }
+   666	    }
+   667	    this.put(" ",params);
+   668	    this.put("*",errors.toString());
+   669	    return this;
+   670	  }
+   671	
+   672	/**
+   673	  * This demonstrates how the argument parsing methods might be used,
+   674	  * including specifying the options and a usage string,
+   675	  * and testing to see if a particular flag or property is present,
+   676	  * and obtaining the list of parameters.
+   677	  * Notice that it can be run again, perhaps after having added or
+   678	  * removed some parameters.
+   679	  */
+   680	
+   681	  static public String[] shiftArgs(String[] args, int shift){
+   682	    String[] result = new String[args.length -shift];
+   683	    for (int j=0;j<result.length;j++){
+   684	      result[j]=args[j+shift];
+   685	    }
+   686	    return result;
+   687	  }
+   688	
+   689	  static class PFormatter extends Formatter{
+   690	  // Cumulative time is the best
+   691	    public String format(LogRecord r){
+   692	      StringBuffer b=new StringBuffer(100);
+   693	      b.append(string12(r.getLevel().toString()));
+   694	      b.append(' ');
+   695	      b.append(time13(r.getMillis()-startTime));
+   696	      b.append(' ');
+   697	      b.append(formatMessage(r));
+   698	      b.append('\n');
+   699	      return b.toString();
+   700	    }
+   701	
+   702	    static public String time13(long time){
+   703	      StringBuffer b = new StringBuffer(26);
+   704	      b.append("             ");
+   705	      b.append(time);
+   706	      return b.substring(b.length()-13);
+   707	    }
+   708	
+   709	    static public String string12(String s){
+   710	      StringBuffer b = new StringBuffer(12);
+   711	      b.append(s);
+   712	      int l=12-b.length();
+   713	      for(int j=0;j<l;j++){
+   714	        b.append(' ');
+   715	      }
+   716	      return b.toString();
+   717	    }
+   718	  }
+   719	
+   720	  static public class Tester{
+   721	
+   722	    static public void main(String[] args){
+   723	      long startTime=System.currentTimeMillis();
+   724	      String options=args[0];
+   725	      String[] newargs=P.shiftArgs(args,1);
+   726	      P.rintln("Expecting "+options);
+   727	      P cmdArgs=P.arseArgs(options, newargs);
+   728	      P.rintln(cmdArgs.getErrors());
+   729	      String property; 
+   730	      P.rintln("flag a is "+cmdArgs.getFlag("-a"));
+   731	      P.rintln("flag b is "+cmdArgs.getFlag("-b"));
+   732	      property = cmdArgs.getProperty("-c");   
+   733	      P.rintln((property==null)?"No property c":"c value is "+property);
+   734	      property = cmdArgs.getProperty("-d");   
+   735	      P.rintln((property==null)?"No property d":"d value is "+property);
+   736	      String[] params = cmdArgs.getParams();
+   737	      if (0 != params.length){
+   738	        P.rintln("  === Parameters ===  ");
+   739	        P.rintln(params);
+   740	      }
+   741	      /*
+   742	        Do it with a usage message, which will exit 
+   743	        after printing that message if there is a parse error
+   744	      */
+   745	      P.rintln("\n\n Trying it with a usage message");
+   746	      options="a-b+c_d.";
+   747	      String usage = "P options [-a] -b [-c Value] -d Value";
+   748	      cmdArgs=P.arseArgs(options, newargs, usage);
+   749	    }
+   750	  }
+   751	}

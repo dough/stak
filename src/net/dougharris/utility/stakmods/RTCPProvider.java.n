@@ -1,0 +1,270 @@
+     1	package net.dougharris.utility.stakmods;
+     2	
+     3	import net.dougharris.utility.PacketInputStream;
+     4	import java.io.IOException;
+     5	import java.io.EOFException;
+     6	import java.util.ArrayList;
+     7	import net.dougharris.utility.DumpHex;
+     8	
+     9	public class RTCPProvider extends GenericProvider{
+    10	  byte[] data=null;
+    11	  String parsedTag;
+    12	  String messageTag;
+    13	  int parsedLength;
+    14	  int headerLength;
+    15	  int vpCnt;
+    16	  int rType;
+    17	  int rLength;
+    18	  ArrayList reportList;
+    19	private int nAvailable;//JDH
+    20	
+    21	  /**
+    22	   * These are defined in RFC3550
+    23	   */
+    24	  static int SR=200;
+    25	  static int RR=201;
+    26	  static int SDES=202;
+    27	  static int BYE=203;
+    28	  static int APP=204;
+    29	
+    30	  /**
+    31	   * These are defined in RFC3550
+    32	   */
+    33	  static String[] sdesTypeStrings = new String[9];
+    34	  static {
+    35	    sdesTypeStrings[0]="END";
+    36	    sdesTypeStrings[1]="CNAME";
+    37	    sdesTypeStrings[2]="NAME";
+    38	    sdesTypeStrings[3]="EMAIL";
+    39	    sdesTypeStrings[4]="PHONE";
+    40	    sdesTypeStrings[5]="LOC";
+    41	    sdesTypeStrings[6]="TOOL";
+    42	    sdesTypeStrings[7]="NOTE";
+    43	    sdesTypeStrings[8]="PRIV";
+    44	  }
+    45	
+    46	  public Provider parse(PacketInputStream i, int length, String parserTag) throws Exception{
+    47	    nAvailable=i.available();
+    48	    byte[] b;
+    49	    setLength(length);
+    50	    setTag(parserTag);
+    51	    headerLength=0;
+    52	    /*
+    53	    The parse should establish messageTag
+    54	    The parse should establish headerLength
+    55	    The parse should establish messageLength
+    56	    */
+    57	    try{
+    58	      /*
+    59	       * The messageLength will just be the length of the data just read
+    60	       * For RTCP there is nothing above so we should be able to read
+    61	       * it all off as reports. We will treat this as entirely a header,
+    62	       * that is an envelop with no message.
+    63	       */
+    64		    /*
+    65		     * what we really want here is to build an array
+    66		     * of these counts and especially types and values
+    67		     * that is a TLVArray which we can later report on
+    68		     */
+    69	    reportList = new ArrayList();
+    70		  nAvailable=i.available();
+    71	System.err.println("\nnew RTCPCompoundReport on "+nAvailable);
+    72	  data= new byte[nAvailable];
+    73	//JDH  i.readFully(data);
+    74	/*JDH start report JDH*/
+    75		  while (0<(nAvailable=i.available())){
+    76		    vpCnt = i.readUnsignedByte();headerLength+=1;
+    77		    rType = i.readUnsignedByte();headerLength+=1;
+    78	System.err.print("rType: "+rType);
+    79		    rLength=4*(i.readUnsignedShort());headerLength+=2;
+    80	System.err.print(" rLength: "+rLength);
+    81		  nAvailable=i.available();
+    82	System.err.print(" available: "+nAvailable);
+    83	if (nAvailable<rLength){
+    84	  System.err.println(" SHORT");
+    85	  b = new byte[i.available()];
+    86	} else {
+    87	  b = new byte[rLength];
+    88	}
+    89	System.err.println();
+    90		    i.readFully(b);headerLength+=rLength;
+    91		    reportList.add(new RTCPReport(rType, rLength+4, b));
+    92		  }
+    93	/*JDH Stop report JDH*/
+    94	System.err.println("Done with the RTCPPacket");
+    95	      /*
+    96	       * Fix up this packet.
+    97	       */
+    98	      setMessageTag(messageTag); // should be "none"
+    99	      setMessageLength(i.available()); // should be 0
+   100	      setLength(headerLength+messageLength);
+   101	    } catch(EOFException x){
+   102	      System.err.println("RTCP got "+x);
+   103	    } catch(IOException x){
+   104	      System.err.println(x);
+   105	    } finally{
+   106	      messageLength=-1;
+   107	      messageTag=null;
+   108	      return this;
+   109	    }
+   110	  }
+   111	
+   112	  public String providerReport(String type) throws Exception{
+   113		  RTCPReport report;
+   114		  String typeTag;
+   115	 /*
+   116	  * Things have been arranged so this is BOL
+   117	  */
+   118	    StringBuffer b=new StringBuffer();
+   119	/*JDH Start print report JDH*/
+   120	    if (type.equals("drop")){
+   121	    } else
+   122	    if (type.equals("short")){
+   123	      b.append(" length ");
+   124	      b.append(data.length);
+   125	    } else
+   126	    if (type.equals("regular")){
+   127	b.append("Available bytes:");
+   128	b.append(nAvailable);
+   129	b.append("\n");
+   130		    b.append("RTCPReportList:\n");
+   131		    for (int j=0;j<reportList.size();j++){
+   132		       report = (RTCPReport)reportList.get(j);
+   133		    int k;
+   134		    switch(report.type){
+   135		    case 200:
+   136		     k=0;
+   137		     b.append("  SR: length ");
+   138		     b.append(report.length);
+   139		     b.append(" SSRC: ");
+   140		     for (;k<4;k++){
+   141		       b.append(DumpHex.hexPrint(report.report[k]));
+   142		     }
+   143		     b.append("\n");
+   144		     b.append("    NTPstamp: ");
+   145		     for (;k<12;k++){
+   146		       b.append(DumpHex.hexPrint(report.report[k]));
+   147		     }
+   148		     b.append("\n");
+   149		     b.append("    RTPstamp: ");
+   150		     for (;k<16;k++){
+   151		       b.append(DumpHex.hexPrint(report.report[k]));
+   152		     }
+   153		     b.append("\n");
+   154		     b.append("    sentPackets: ");
+   155		     for (;k<20;k++){
+   156		       b.append(DumpHex.hexPrint(report.report[k]));
+   157		     }
+   158		     b.append("\n");
+   159		     b.append("    sentBytes: ");
+   160		     for (;k<24;k++){
+   161		       b.append(DumpHex.hexPrint(report.report[k]));
+   162		     }
+   163		     b.append("\n");
+   164		    break;
+   165		    case 201:
+   166		     k=0;
+   167		     b.append("  RR:length ");
+   168		     b.append(report.length);
+   169		     b.append(" SSRC: ");
+   170		     for (;k<4;k++){
+   171		       b.append(DumpHex.hexPrint(report.report[k]));
+   172		     }
+   173		     b.append("\n");
+   174		     if (k<report.length-4){
+   175		     b.append("    SRC 1: ");
+   176		     for (;k<8;k++){
+   177		       b.append(DumpHex.hexPrint(report.report[k]));
+   178		     }
+   179		     b.append("\n");
+   180		     b.append("    loss: ");
+   181		     for (;k<12;k++){
+   182		       b.append(DumpHex.hexPrint(report.report[k]));
+   183		     }
+   184		     b.append("\n");
+   185		     b.append("    hiseq: ");
+   186		     for (;k<16;k++){
+   187		       b.append(DumpHex.hexPrint(report.report[k]));
+   188		     }
+   189		     b.append("\n");
+   190		     b.append("    jitter: ");
+   191		     for (;k<20;k++){
+   192		       b.append(DumpHex.hexPrint(report.report[k]));
+   193		     }
+   194		     b.append("\n");
+   195		     b.append("    last SR: ");
+   196		     for (;k<24;k++){
+   197		       b.append(DumpHex.hexPrint(report.report[k]));
+   198		     }
+   199		     b.append("\n");
+   200		     b.append("    delay: ");
+   201		     for (;k<28;k++){
+   202		       b.append(DumpHex.hexPrint(report.report[k]));
+   203		     }
+   204		     b.append("\n");
+   205		     }
+   206		    break;
+   207		    case 202:
+   208		     b.append("  SDES: length ");
+   209		     b.append(report.length);
+   210		     b.append(" SSRC: ");
+   211		     for (k=0;k<4;k++){
+   212		       b.append(DumpHex.hexPrint(report.report[k]));
+   213		     }
+   214		     b.append("\n");
+   215		      int l;
+   216		      int t;
+   217		      while ((t=report.report[k])!=0){
+   218		        l=report.report[++k];
+   219			b.append("    ");
+   220			b.append(sdesTypeStrings[t]);
+   221			b.append(": ");
+   222			b.append(new String(report.report, ++k, l));
+   223		        b.append("\n");
+   224		        k+=l;
+   225		      }
+   226		     b.append("\n");
+   227		    break;
+   228		    case 203:
+   229		     b.append("  BYE: length ");
+   230		     b.append(report.length);
+   231		     b.append(" SSRC: ");
+   232		     for (k=0;k<4;k++){
+   233		       b.append(DumpHex.hexPrint(report.report[k]));
+   234		     }
+   235		     b.append("\n");
+   236		     if (k<report.length){
+   237		       l=report.report[k];
+   238		       b.append("    REASON: ");
+   239	  	       b.append(new String(report.report, ++k, l));
+   240		       b.append("\n");
+   241		     }
+   242		    break;
+   243		    case 204:
+   244		     b.append("APP: length ");
+   245		     b.append(report.length);
+   246		     b.append("\n");
+   247		    break;
+   248	      default:
+   249	      b.append("Unknown report type");
+   250	      break;
+   251		    }
+   252	      }
+   253	    }
+   254	/*JDH Stop print report JDH*/
+   255	//JDH     b.append(DumpHex.dumpBytes(data));
+   256	    return b.toString();
+   257	  }
+   258	
+   259	  class RTCPReport{
+   260		  int type;
+   261		  int length;
+   262		  byte[] report;
+   263	
+   264		  RTCPReport(int type, int length, byte[] report){
+   265		    this.type=type;
+   266		    this.length=length;
+   267		    this.report=report;
+   268		  }
+   269	  }
+   270	}

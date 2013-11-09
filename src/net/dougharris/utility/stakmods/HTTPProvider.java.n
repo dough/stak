@@ -1,0 +1,98 @@
+     1	package net.dougharris.utility.stakmods;
+     2	
+     3	import net.dougharris.utility.PacketInputStream;
+     4	import net.dougharris.utility.DumpHex;
+     5	import java.io.IOException;
+     6	import java.io.EOFException;
+     7	import java.util.StringTokenizer;
+     8	import java.util.Map;
+     9	import java.util.HashMap;
+    10	import java.util.Iterator;
+    11	
+    12	public class HTTPProvider extends GenericProvider{
+    13	  private byte[] data;
+    14	  private String qrLine;
+    15	  transient private HashMap qHeadersMap = new HashMap();
+    16	
+    17	  public Provider parse(PacketInputStream i, int length, String parserTag){
+    18	    String qHeaderLine;
+    19	    int separator;
+    20	    String name;
+    21	    String previousValue;
+    22	    String value;
+    23	    int CRLF=2;
+    24	
+    25	//JDH Appears to be wrong length, always shows 0
+    26	    setLength(length);
+    27	    setTag(parserTag);
+    28	    headerLength=0;
+    29	    if (length>0){
+    30	    data=new byte[i.available()]; 
+    31	    try{
+    32	      qrLine = i.readLine(); headerLength+=qrLine.length()+CRLF;
+    33	System.err.println("query of length "+qrLine.length()+ " gives headerLength "+headerLength);
+    34	// get lines until there is a blank line (line of zero length)
+    35	// they should all be headers
+    36	      while (0<(qHeaderLine=i.readLine()).length()){
+    37	        headerLength+=qHeaderLine.length()+CRLF;
+    38	System.err.println();
+    39	// if this is -1 it is not a header, and we have an error
+    40	// for now we should perhaps ignore it, or put "ERROR"
+    41	        separator = qHeaderLine.indexOf(":");
+    42	        name  = qHeaderLine.substring(0, separator).toUpperCase();;
+    43	System.err.println("header "+name+" of length "+qHeaderLine.length()+" gives headerLength "+headerLength);
+    44	        value = qHeaderLine.substring(separator+2);
+    45	        previousValue = (String)qHeadersMap.get(name);
+    46	        if (null != previousValue){
+    47	          value=previousValue += ", " + value;
+    48	        }
+    49	        qHeadersMap.put(name, value);
+    50	      }
+    51	      headerLength+=CRLF;
+    52	     //JDH  i.readFully(data);headerLength+=data.length;
+    53	    } catch(EOFException x){
+    54	      System.err.println(x);
+    55	    } catch(IOException x){
+    56	      System.err.println(x);
+    57	    }
+    58	}
+    59	      parsedTag = "raw";
+    60	      setMessageLength(getLength()-headerLength);
+    61	      setMessageTag(parsedTag);
+    62	      return this;
+    63	    }
+    64	
+    65	  public String providerReport(String type) throws Exception{
+    66	 /*
+    67	  * Things have been arranged so this is BOL
+    68	  */
+    69	
+    70	    StringBuffer b=new StringBuffer();
+    71	    if (type.equals("drop")){
+    72	    } else
+    73	    if (type.equals("short")){
+    74	      b.append(" length ");
+    75	      b.append(data.length);
+    76	    } else
+    77	    if (type.equals("regular")){
+    78	      if((data!=null)&&(data.length!=0)){
+    79	        b.append("  ");
+    80	        b.append("qrLine: ");
+    81	        b.append(qrLine);
+    82	        b.append("\n");
+    83	        Map.Entry entry;
+    84	        String key;
+    85	        for (Iterator i = qHeadersMap.entrySet().iterator(); i.hasNext();){
+    86	          entry = (Map.Entry)i.next();
+    87	          key = (String)entry.getKey();
+    88	          b.append("  ");
+    89	          b.append(key);
+    90	          b.append(": ");
+    91	          b.append(entry);
+    92	          b.append("\n");
+    93	        }
+    94	      }
+    95	    }
+    96	    return b.toString();
+    97	  }
+    98	}

@@ -1,0 +1,54 @@
+     1	package net.dougharris.utility.stakmods;
+     2	
+     3	import net.dougharris.utility.PacketInputStream;
+     4	import net.dougharris.utility.DumpHex;
+     5	import java.io.IOException;
+     6	import java.io.EOFException;
+     7	import java.util.StringTokenizer;
+     8	
+     9	public class RAWProvider extends GenericProvider{
+    10	  private byte[] data;
+    11	
+    12	  public Provider parse(PacketInputStream i, int length, String parserTag){
+    13	    setLength(length);
+    14	    setTag(parserTag);
+    15	    headerLength=0;
+    16	    data=new byte[i.available()]; 
+    17	//    data=new byte[Math.min(totalLength,i.available())]; //JDHfix
+    18	    try{
+    19	      i.readFully(data);headerLength+=data.length;
+    20	      /*
+    21	       * The messageLength will just be the length of the data just read
+    22	       * For ICMP the length is just whatever it turns out to be.
+    23	       */
+    24	    } catch(EOFException x){
+    25	      System.err.println(x);
+    26	    } catch(IOException x){
+    27	      System.err.println(x);
+    28	    } finally{
+    29	      setMessageLength(-1);
+    30	      setMessageTag(null);
+    31	      return this;
+    32	    }
+    33	  }
+    34	
+    35	  public String providerReport(String type) throws Exception{
+    36	 /*
+    37	  * Things have been arranged so this is BOL
+    38	  */
+    39	
+    40	    StringBuffer b=new StringBuffer();
+    41	    if (type.equals("drop")){
+    42	    } else
+    43	    if (type.equals("short")){
+    44	      b.append(" length ");
+    45	      b.append(data.length);
+    46	    } else
+    47	    if (type.equals("regular")){
+    48	      if((data!=null)&&(data.length!=0)){
+    49	       b.append(DumpHex.dumpBytes(data));
+    50	      }
+    51	    }
+    52	    return b.toString();
+    53	  }
+    54	}

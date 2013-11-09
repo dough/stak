@@ -1,0 +1,25 @@
+Parse  of a tcpdump file with parameters:
+  (Magic:d4c3b2a1 Major:2 Minor:4 timezone:0 Junk:0 SnapLen:65535 LinkType:1)
+
+Capturing began at: Fri Feb 02 13:40:01 CST 2007
+
+[0.00000.00000](0.00000.00000)   CAPTURE-00000 98/98
+net.dougharris.utility.stakmods.EPProvider@7a84e4net.dougharris.utility.stakmods.IPProvider@1aaa14anet.dougharris.utility.stakmods.ICMPProvider@1430b5c
+[0.00030.00416](0.00030.00416)   CAPTURE-00001 98/98
+net.dougharris.utility.stakmods.EPProvider@7a84e4net.dougharris.utility.stakmods.IPProvider@1aaa14anet.dougharris.utility.stakmods.ICMPProvider@1430b5c
+[1.00015.00938](0.00985.00522)   CAPTURE-00002 98/98
+net.dougharris.utility.stakmods.EPProvider@7a84e4net.dougharris.utility.stakmods.IPProvider@1aaa14anet.dougharris.utility.stakmods.ICMPProvider@1430b5c
+[1.00044.00965](0.00029.00027)   CAPTURE-00003 98/98
+net.dougharris.utility.stakmods.EPProvider@7a84e4net.dougharris.utility.stakmods.IPProvider@1aaa14anet.dougharris.utility.stakmods.ICMPProvider@1430b5c
+[2.00028.00630](0.00983.00665)   CAPTURE-00004 98/98
+net.dougharris.utility.stakmods.EPProvider@7a84e4net.dougharris.utility.stakmods.IPProvider@1aaa14anet.dougharris.utility.stakmods.ICMPProvider@1430b5c
+[2.00058.00687](0.00030.00057)   CAPTURE-00005 98/98
+net.dougharris.utility.stakmods.EPProvider@7a84e4net.dougharris.utility.stakmods.IPProvider@1aaa14anet.dougharris.utility.stakmods.ICMPProvider@1430b5c
+[3.00041.00541](0.00982.00854)   CAPTURE-00006 98/98
+net.dougharris.utility.stakmods.EPProvider@7a84e4net.dougharris.utility.stakmods.IPProvider@1aaa14anet.dougharris.utility.stakmods.ICMPProvider@1430b5c
+[3.00070.00679](0.00029.00138)   CAPTURE-00007 98/98
+net.dougharris.utility.stakmods.EPProvider@7a84e4net.dougharris.utility.stakmods.IPProvider@1aaa14anet.dougharris.utility.stakmods.ICMPProvider@1430b5c
+[4.00054.00026](0.00983.00347)   CAPTURE-00008 98/98
+net.dougharris.utility.stakmods.EPProvider@7a84e4net.dougharris.utility.stakmods.IPProvider@1aaa14anet.dougharris.utility.stakmods.ICMPProvider@1430b5c
+[4.00085.00319](0.00031.00293)   CAPTURE-00009 98/98
+net.dougharris.utility.stakmods.EPProvider@7a84e4net.dougharris.utility.stakmods.IPProvider@1aaa14anet.dougharris.utility.stakmods.ICMPProvider@1430b5c

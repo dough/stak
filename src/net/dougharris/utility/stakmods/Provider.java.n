@@ -1,0 +1,30 @@
+     1	package net.dougharris.utility.stakmods;
+     2	
+     3	import net.dougharris.utility.PacketInputStream;
+     4	import java.io.Serializable;
+     5	import java.io.IOException;
+     6	import java.io.EOFException;
+     7	
+     8	public interface Provider extends Serializable{
+     9	  public Provider
+    10	    parse(PacketInputStream i, int length, String parserTag) throws Exception;
+    11	  public String toString();
+    12	  public String toString(String type);
+    13	  public String providerReport(String type) throws Exception;
+    14	/*
+    15	 * The length would have been determined at the sender by the provider as it created the envelope
+    16	 * The length is determined at the receiver by the agent which delivers it
+    17	 * It should then be compared against any length that the provider can parse off of the envelope.
+    18	 */
+    19	  public void setLength(int l);
+    20	  public int getLength();
+    21	
+    22	  public void setTag(String pTag);
+    23	  public String getTag();
+    24	
+    25	  public void setMessageLength(int l);
+    26	  public int getMessageLength();
+    27	
+    28	  public void setMessageTag(String pTag);
+    29	  public String getMessageTag();
+    30	}

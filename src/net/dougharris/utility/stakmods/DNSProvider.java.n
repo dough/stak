@@ -1,0 +1,31 @@
+     1	package net.dougharris.utility.stakmods;
+     2	
+     3	import net.dougharris.utility.stakmods.dns.RFC1035;
+     4	import net.dougharris.utility.PacketInputStream;
+     5	import net.dougharris.utility.DumpHex;
+     6	import java.io.IOException;
+     7	import java.io.EOFException;
+     8	
+     9	public class DNSProvider extends GenericProvider{
+    10	  private RFC1035 rfc1035;
+    11	
+    12	  public Provider
+    13	  parse(PacketInputStream i, int length, String parserTag) throws Exception{
+    14	    setLength(length);
+    15	    setTag(parserTag);
+    16	    byte[] b=new byte[i.available()];
+    17	    i.readFully(b);
+    18	System.err.println("Before the rfc1035 parse of size "+b.length);
+    19	    rfc1035 = new RFC1035(b, 0, b.length);
+    20	    rfc1035.parse();
+    21	System.err.println("After the rfc1035 parse");//JDHE never gets here on 4th
+    22	    setMessageLength(0);
+    23	    setMessageTag(null);
+    24	    return this;
+    25	  }
+    26	
+    27	  public String toString(StringBuffer b){
+    28	    b.append(rfc1035.toString());
+    29	    return b.toString();
+    30	  }
+    31	}

@@ -1,0 +1,485 @@
+     1	package net.dougharris.utility;
+     2	
+     3	import net.dougharris.utility.P;
+     4	import net.dougharris.utility.PacketInputStream;
+     5	import net.dougharris.utility.UnsignedInputStream;
+     6	import net.dougharris.utility.DumpHex;
+     7	import net.dougharris.utility.stakmods.*;
+     8	
+     9	import java.io.File;
+    10	import java.io.FileWriter;
+    11	import java.io.PrintWriter;
+    12	import java.io.InputStream;
+    13	import java.io.ObjectInputStream;
+    14	import java.io.FileInputStream;
+    15	import java.io.BufferedInputStream;
+    16	import java.io.BufferedWriter;
+    17	import java.io.OutputStream;
+    18	import java.io.ObjectOutputStream;
+    19	import java.io.FileOutputStream;
+    20	import java.io.OutputStreamWriter;
+    21	import java.io.FileNotFoundException;
+    22	import java.io.IOException;
+    23	import java.io.EOFException;
+    24	import java.util.Date;
+    25	import java.util.HashMap;
+    26	import java.util.Set;
+    27	import java.util.Properties;
+    28	import java.util.Enumeration; // Change this, it is only for one property file
+    29	import java.util.Iterator;
+    30	import java.util.StringTokenizer;
+    31	import java.util.ArrayList;
+    32	
+    33	import java.util.logging.Logger;
+    34	import java.util.logging.Formatter;
+    35	import java.util.logging.Level;
+    36	import java.util.logging.Handler;
+    37	import java.util.logging.LogRecord;
+    38	
+    39	public class stak{
+    40	  static InputStream iUser=null; 
+    41	  static String options="?-i-I_o-O_s-S_r-R_d_D_v-V-l-L_";
+    42	  static P cmdArgs;
+    43	  static Properties providerClasses;
+    44	  static HashMap providers;
+    45	  static private byte[] magicBytes = new byte[4];
+    46	  static private int major;
+    47	  static private int minor;
+    48	  static private long timezone;
+    49	  static private long junk;
+    50	  static private long snaplen;
+    51	  static private long sigfigs;
+    52	  static private long linktype;
+    53	  static private String linkTag;
+    54	  static private byte[] data=null;
+    55	
+    56	  static private long timeStamp;
+    57	  static private long runStamp;
+    58	  static private long oRunningStamp;
+    59	  static private long diffTime;
+    60	  static long dumpStart;
+    61	  static boolean bigEndian;
+    62	  static StringBuffer dumpBuffer=new StringBuffer();
+    63	  static String inFileName="null";
+    64	  static String outFileName=null;
+    65	  static String serFileName=null;
+    66	  static String deserFileName=null;
+    67	  static OutputStream oUser=null;
+    68	  static InputStream rUser=null;
+    69	  static OutputStream sUser=null;
+    70	  static PrintWriter outputWriter;
+    71	  static UnsignedInputStream dumpStream;
+    72	  static ObjectOutputStream serStream;
+    73	  static ObjectInputStream deserStream;
+    74	  static String[] mainArgs;
+    75	
+    76	  public static HashMap getProviderClasses(){
+    77	    Properties defaultProviderClasses;
+    78	    defaultProviderClasses=new Properties();
+    79	    defaultProviderClasses.put("ether", "net.dougharris.utility.stakmods.EPProvider");
+    80	    defaultProviderClasses.put("etherPrism", "net.dougharris.utility.stakmods.EPPrismProvider");
+    81	    defaultProviderClasses.put("ether11", "net.dougharris.utility.stakmods.EP11Provider");
+    82	    defaultProviderClasses.put("arp", "net.dougharris.utility.stakmods.ARPProvider");
+    83	    defaultProviderClasses.put("ip", "net.dougharris.utility.stakmods.IPProvider");
+    84	    defaultProviderClasses.put("icmp", "net.dougharris.utility.stakmods.ICMPProvider");
+    85	    defaultProviderClasses.put("udp", "net.dougharris.utility.stakmods.UDPProvider");
+    86	    defaultProviderClasses.put("dns", "net.dougharris.utility.stakmods.DNSProvider");
+    87	    defaultProviderClasses.put("tcp", "net.dougharris.utility.stakmods.TCPConnectionProvider");
+    88	    defaultProviderClasses.put("http", "net.dougharris.utility.stakmods.HTTPProvider");
+    89	    defaultProviderClasses.put("rtp", "net.dougharris.utility.stakmods.RTPProvider");
+    90	    defaultProviderClasses.put("rtcp", "net.dougharris.utility.stakmods.RTCPProvider");
+    91	    defaultProviderClasses.put("raw", "net.dougharris.utility.stakmods.RAWProvider");
+    92	    providerClasses = new Properties(defaultProviderClasses);
+    93	    try{
+    94	      String propFileName=System.getProperty("java.home")+File.separator+
+    95	        "lib"+File.separator+"dump.properties";
+    96	      File propFile=new File(propFileName);
+    97	      if ((propFile!=null)&&propFile.exists()&&propFile.canRead()){
+    98	        InputStream propInputStream = 
+    99	          new BufferedInputStream(new FileInputStream(propFile));
+   100	        providerClasses.load(propInputStream);
+   101	        propInputStream.close();
+   102	      }
+   103	    } catch(IOException x){
+   104	       System.exit(1);
+   105	    }
+   106	    Enumeration providerClassKeys = providerClasses.propertyNames();
+   107	    String providerClassKey = null;
+   108	    String providerClassName = null;
+   109	    Class c=null;
+   110	    Provider pc;
+   111	    providers = new HashMap();
+   112	    while (providerClassKeys.hasMoreElements()){
+   113	      try{
+   114	        providerClassKey = (String)providerClassKeys.nextElement();
+   115	        providerClassName = providerClasses.getProperty(providerClassKey);
+   116	  if (null != providerClassName){
+   117	          c = Class.forName(providerClassName);
+   118	          pc=(Provider)c.newInstance();
+   119	    providers.put(providerClassKey, pc);
+   120	  }
+   121	      } catch(ClassNotFoundException x){
+   122	        System.err.println(x.getClass().getName()+" for "+providerClassName);
+   123	      } catch(InstantiationException x){
+   124	        System.err.println(x.getClass().getName()+" for "+providerClassName);
+   125	      } catch(IllegalAccessException x){
+   126	        System.err.println(x.getClass().getName()+" for "+providerClassName);
+   127	      }
+   128	    }
+   129	    return providers;
+   130	  }
+   131	
+   132	  public static String formatStamp(long us){
+   133	    StringBuffer b=new StringBuffer();
+   134	    // the stamp is in microseconds//
+   135	    long ms=us/1000;
+   136	    us = us-1000*ms;
+   137	    long s =ms/1000;
+   138	    ms = ms-1000*s;
+   139	    b.append(s+"."+DumpHex.decPrint(ms)+"."+DumpHex.decPrint(us));
+   140	    return b.toString();
+   141	  }
+   142	
+   143	  public static void main(String[] args) throws Exception{
+   144	    Runtime.getRuntime().addShutdownHook(new Shutdown());
+   145	    String token;
+   146	    Set packetHandlers = getProviderClasses().keySet();
+   147	    Iterator handlerNames = packetHandlers.iterator();
+   148	    int howManyCaptures=0;
+   149	
+   150	    cmdArgs=P.arseArgs(options, args);
+   151	    if (cmdArgs.getFlag("-?")){
+   152	      help();
+   153	      P.exit(0);
+   154	    }
+   155	
+   156	/*
+   157	 * I am going to put all this into run
+   158	 *
+   159	    mainArgs=cmdArgs.getParams();
+   160	    setLogging();
+   161	    setInputOutputStreams();
+   162	*/
+   163	    (new stak()).run();
+   164	  }
+   165	
+   166	  static void setLogging(){
+   167	    Level logLevel;
+   168	    logLevel=Level.SEVERE;
+   169	    boolean logInfo = cmdArgs.getFlag("-v");
+   170	    boolean logFine = cmdArgs.getFlag("-V");
+   171	    if (!logFine){
+   172	      if (logInfo){ // -v
+   173	        logLevel=Level.INFO;
+   174	      }
+   175	    } else { // logFine
+   176	      if (!logInfo){ // -V
+   177	        logLevel=Level.CONFIG;
+   178	      } else { // -v -V
+   179	        logLevel=Level.FINE;
+   180	      }
+   181	    }
+   182	    cmdArgs.setLogLevel(logLevel);
+   183	    if (null!=cmdArgs.getProperty("-L")){
+   184	      String logFileName=cmdArgs.getProperty("-L");
+   185	      cmdArgs.setLogFile(logFileName);
+   186	    }
+   187	  }
+   188	
+   189	  static public void setInputOutputStreams(){
+   190	// Setting dump input stream iUser
+   191	// Maybe eventually have to coordinate with -R as well
+   192	    try{
+   193	      iUser = new FileInputStream("capture.dump");
+   194	      if(null!=(inFileName=cmdArgs.getProperty("-I"))){
+   195	        iUser=new FileInputStream(inFileName);
+   196	      }
+   197	      if (cmdArgs.getFlag("-i")) {
+   198	        iUser=System.in;
+   199	      } 
+   200	      dumpStream=new UnsignedInputStream(iUser);
+   201	    }catch(Exception x){
+   202	      P.exit(x);
+   203	    }
+   204	
+   205	// Setting serialized output stream sUser
+   206	    try{
+   207	      if(null!=(serFileName=cmdArgs.getProperty("-S"))){
+   208	        sUser=new ObjectOutputStream(new FileOutputStream(serFileName));
+   209	        serStream=new ObjectOutputStream(sUser);
+   210	      } 
+   211	    } catch(IOException x){
+   212	      P.exit(x);
+   213	    }
+   214	
+   215	// Setting serialized input stream rUser
+   216	    try{
+   217	      if(null!=(serFileName=cmdArgs.getProperty("-R"))){
+   218	        rUser=new FileInputStream(serFileName);
+   219	        deserStream=new ObjectInputStream(rUser);
+   220	      } 
+   221	    } catch(IOException x){
+   222	      P.exit(x);
+   223	    }
+   224	
+   225	// Setting dump output stream oUser
+   226	     try{
+   227	      if(null!=(outFileName=cmdArgs.getProperty("-O"))){
+   228	        oUser=new FileOutputStream(outFileName);
+   229	      } else if (cmdArgs.getFlag("-o")){
+   230	        oUser=System.out;
+   231	      } else {
+   232	        oUser=new FileOutputStream("capture.out");
+   233	      }
+   234	      outputWriter=new PrintWriter(oUser);
+   235	    } catch(IOException x){
+   236		    P.exit(x);
+   237	    }
+   238	  }
+   239	
+   240	  public void run(){
+   241	    try{
+   242	      mainArgs=cmdArgs.getParams();
+   243	/* These are moved here from main //JDHM
+   244	*/
+   245	      setLogging();
+   246	      setInputOutputStreams();
+   247	      parseDump();
+   248	      outputWriter.close();
+   249	    } catch(EOFException x){
+   250	System.err.println("Parsing from dumpStream done ");
+   251	//JDH Already written for each Capture      outputWriter.print(dumpBuffer.toString());
+   252	      outputWriter.close();
+   253	    } catch(IOException x){
+   254	      System.err.println("IOException");
+   255	      System.exit(13); //JDH
+   256	    } catch(NullPointerException x){
+   257	      System.err.println("NullPointerException");
+   258	      System.exit(3); //JDH
+   259	    }
+   260	  }
+   261	
+   262	 public static void help(){
+   263	    P.rintln("[-?] # show cmdline options");
+   264	    P.rintln("[-i] # read from stdin");
+   265	    P.rintln("[-I fileName] # read  from fileName");
+   266	    P.rintln("[-o] # write to stdout");
+   267	    P.rintln("[-O fileName] # write to fileName");
+   268	    P.rintln("[-s # serialize to stdout");
+   269	    P.rintln("[-S fileName] # serialize to fileName");
+   270	    P.rintln("[-r fileName] # deserialize from stdin");
+   271	    P.rintln("[-R fileName] # deserialize from fileName");
+   272	    P.rintln("[-v] # minimal logging");
+   273	    P.rintln("[-V] # medium logging");
+   274	    P.rintln("[-l] # log to stderr");
+   275	    P.rintln("[-L fileName] # log to fileName");
+   276	  }
+   277	
+   278	  public void parseDump() throws EOFException{
+   279	    try{
+   280	      dumpStream.readFully(magicBytes);
+   281	      if (magicBytes[0]==(byte)161){
+   282	        bigEndian=true;
+   283	      } else {
+   284	        bigEndian=false;
+   285	      }
+   286	      major = dumpStream.readUnsignedShort(bigEndian);
+   287	      minor = dumpStream.readUnsignedShort(bigEndian);
+   288	      timezone=dumpStream.readUnsignedInt(bigEndian); // 4
+   289	      junk=dumpStream.readUnsignedInt(bigEndian);
+   290	      snaplen = dumpStream.readUnsignedInt(bigEndian);
+   291	      linktype= dumpStream.readUnsignedInt(bigEndian);
+   292	//      linkTag=(linktype==119)?"etherPrism":"ether";
+   293	switch ((int)linktype){
+   294	  case 119:linkTag="etherPrism";break;
+   295	  case 127:linkTag="etherPrism";break;
+   296	  default: linkTag="ether";break;
+   297	}
+   298	
+   299	      dumpBuffer.append("Parse  of a tcpdump file with parameters:\n");
+   300	      dumpBuffer.append("  ");
+   301	      dumpBuffer.append("(Magic:");
+   302	      dumpBuffer.append(DumpHex.bytesPrint(magicBytes));
+   303	      dumpBuffer.append(" Major:");
+   304	      dumpBuffer.append(major);
+   305	      dumpBuffer.append(" Minor:");
+   306	      dumpBuffer.append(minor);
+   307	      dumpBuffer.append(" timezone:");
+   308	      dumpBuffer.append(timezone);
+   309	      dumpBuffer.append(" Junk:");
+   310	      dumpBuffer.append(junk);
+   311	      dumpBuffer.append(" SnapLen:");
+   312	      dumpBuffer.append(snaplen);
+   313	      dumpBuffer.append(" LinkType:");
+   314	      dumpBuffer.append(linktype);
+   315	      dumpBuffer.append(")\n");
+   316	      dumpBuffer.append("\n");
+   317	      outputWriter.print(dumpBuffer.toString());
+   318	      dumpBuffer= new StringBuffer();
+   319	
+   320	      Capture c;
+   321	//JDHQ How does it know it has come to the end of the dumpStream???? 
+   322	      for(int captureNumber=0;;captureNumber++){
+   323	      if (iUser.available()==0){
+   324	        break;
+   325	      }
+   326	//Create a Capture container to hold this capture
+   327	        c = new Capture(captureNumber);
+   328	//Parse the dumpStream into this container
+   329	        c.parseCapture(dumpStream);
+   330	//Never got here on icmp //JDHE
+   331	        timeStamp=c.getTimeStamp();
+   332	        if (0 == captureNumber){
+   333	          dumpStart = timeStamp;
+   334	          dumpBuffer.append("Capturing began at: ");
+   335	          dumpBuffer.append(new Date(dumpStart/1000));
+   336	          dumpBuffer.append("\n");
+   337	          dumpBuffer.append("\n");
+   338	          runStamp=0;
+   339	        }
+   340	        oRunningStamp = runStamp;
+   341	        runStamp = timeStamp-dumpStart;
+   342	        diffTime = runStamp-oRunningStamp;
+   343	        dumpBuffer.append("["+formatStamp(runStamp)+"]");
+   344	        dumpBuffer.append("("+formatStamp(diffTime)+") "); 
+   345	        dumpBuffer.append(c.toString());
+   346	        outputWriter.print(dumpBuffer.toString());
+   347	        dumpBuffer= new StringBuffer();
+   348	      } //JDH done with this Capture
+   349	      outputWriter.close();
+   350	    } catch(EOFException x){
+   351	throw x;
+   352	    } catch(Exception x){
+   353	System.err.println(x);
+   354	System.err.println("Exception at end of parseDump");
+   355	System.exit(11);
+   356	    }
+   357	System.err.println("normal exit from parseDump ");//JDHE
+   358	  }
+   359	
+   360	  class Capture{
+   361	    String captureString;;
+   362	    long captureLength;
+   363	    long totalLength;
+   364	    long timeStamp;
+   365	    int captureNumber;
+   366	
+   367	    public Capture(int captureNumber){
+   368	      this.captureNumber=captureNumber;
+   369	    }
+   370	
+   371	    public long getTimeStamp(){
+   372	      return this.timeStamp;
+   373	    }
+   374	
+   375	    public int getNumber(){
+   376	      return this.captureNumber;
+   377	    }
+   378	
+   379	    public long getCaptureLength(){
+   380	      return this.captureLength;
+   381	    }
+   382	
+   383	    public long getTotalLength(){
+   384	      return this.totalLength;
+   385	    }
+   386	
+   387	    public void 
+   388	    parseCapture(UnsignedInputStream captureStream) throws IOException, EOFException{
+   389	      byte[] capturedBytes=null;
+   390	      long sec  = captureStream.readUnsignedInt(bigEndian);
+   391	      long usec = captureStream.readUnsignedInt(bigEndian);
+   392	      captureLength = captureStream.readUnsignedInt(bigEndian);
+   393	      if (captureLength > snaplen){
+   394	System.err.println("captureLength is greater than snaplen");//JDH
+   395	        throw new EOFException();
+   396	      }
+   397	      this.totalLength   = dumpStream.readUnsignedInt(bigEndian);
+   398	      this.timeStamp = sec*1000000+usec;
+   399	      capturedBytes= new byte[(int)captureLength];
+   400	      captureStream.readFully(capturedBytes);
+   401	      captureString = parsePacketStack(capturedBytes);
+   402	    }//end parse of Capture
+   403	
+   404	    public String parsePacketStack(byte[] capturedBytes){
+   405	      PacketInputStream i;
+   406	      Provider p;
+   407	      StringBuffer b;
+   408	      String pTag;
+   409	      String pKey;
+   410	      int pLength;
+   411	
+   412	      b = new StringBuffer();
+   413	      pTag=linkTag;
+   414	      i= new PacketInputStream(capturedBytes);
+   415	      pLength = (int)getCaptureLength();
+   416	/*
+   417	If pTag is null then we do nothing, and do not go up the parse stack.
+   418	This is the only way to keep from going up
+   419	And this is the only place where you can go up
+   420	*/
+   421	      while(null !=pTag){
+   422		pKey=(String)(GenericProvider.parseTags(pTag)).get(0);
+   423	        p= (Provider)providers.get(pKey);
+   424		/*
+   425		 * The p just returned should never be null
+   426	         * because we should be using only tags that
+   427	         are in the approved list
+   428		 */
+   429	        if (p==null){
+   430	          System.exit(2);
+   431	        }
+   432	/**
+   433	This is really the central point of the whole thing.
+   434	Here we have for example p as an IPProvider which 
+   435	sets its length to pLength and uses pTag to parse
+   436	and when it has done will have set its pTag to begin
+   437	with the appropriate key for the next parse, that is,
+   438	the User which should now become the Provider.
+   439	
+   440	In particular it will set the MessageType and the MessageLength
+   441	to be used by the next Provider.
+   442	*/
+   443		try{
+   444	          p= p.parse(i, pLength, pTag); 
+   445	 	}catch(Exception x){
+   446	          System.exit(4);
+   447		}
+   448	        b.append(p.toString());
+   449		pTag=p.getMessageTag();
+   450		pLength=p.getMessageLength();
+   451	cmdArgs.fine(
+   452	  "JDH P:"+p.getTag()+"@"+p.getLength()+
+   453	  " becomes "+
+   454	  "P:"+p.getMessageTag()+"@"+p.getMessageLength()
+   455	);
+   456	      } //looping on pTag
+   457	      return b.toString();
+   458	    }
+   459	
+   460	    public String toString(){
+   461	    /*
+   462	     * This shows the entire capture as a string
+   463	     * Needs the actual capture in here!
+   464	     */
+   465	      StringBuffer b=new StringBuffer();
+   466	      b.append("  CAPTURE-");
+   467	      b.append(DumpHex.decPrint(getNumber()));
+   468	      b.append(" ");
+   469	      b.append(captureLength);
+   470	      b.append("/");
+   471	      b.append(totalLength);
+   472	      b.append("\n");
+   473	      b.append(captureString);
+   474	      b.append("\n");
+   475	      return b.toString();
+   476	    }
+   477	  }//end Capture definition
+   478	
+   479	  static class Shutdown extends Thread{
+   480	    public void run(){
+   481	//outputWriter.close();//JDHM
+   482	      System.err.println("\n\n\n\n\nThanks for using stak\n\n");
+   483	    }
+   484	  }
+   485	}

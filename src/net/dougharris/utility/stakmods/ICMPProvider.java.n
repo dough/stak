@@ -1,0 +1,164 @@
+     1	package net.dougharris.utility.stakmods;
+     2	//Tue Aug 24 12:54:44 CDT 2010
+     3	
+     4	import net.dougharris.utility.PacketInputStream;
+     5	import net.dougharris.utility.DumpHex;
+     6	import java.io.EOFException;
+     7	import java.io.IOException;
+     8	
+     9	public class ICMPProvider extends GenericProvider{
+    10	  static String[] icmpTypeStrings = new String[255];
+    11	  static String[] unreachableCodeStrings = new String[16];
+    12	  static {
+    13	    // These values are from
+    14	    // http://www.iana.org/assignments/icmp-parameters
+    15	    icmpTypeStrings[0]="Echo Reply";
+    16	    icmpTypeStrings[1]="Unassigned";
+    17	    icmpTypeStrings[2]="Unassigned";
+    18	    icmpTypeStrings[3]="Destination Unreachable";
+    19	    icmpTypeStrings[4]="Source Quench";
+    20	    icmpTypeStrings[5]="Redirect ";
+    21	    icmpTypeStrings[6]="Alternate Host Address";
+    22	    icmpTypeStrings[7]="Unassigned";
+    23	    icmpTypeStrings[8]="Echo ";
+    24	    icmpTypeStrings[9]="Router Advertisement";
+    25	    icmpTypeStrings[10]="Router Solicitation";
+    26	    icmpTypeStrings[11]="Time Exceeded";
+    27	    icmpTypeStrings[12]="Parameter Problem";
+    28	    icmpTypeStrings[13]="Timestamp";
+    29	    icmpTypeStrings[14]="Timestamp Reply";
+    30	    icmpTypeStrings[15]="Information Request";
+    31	    icmpTypeStrings[16]="Information Reply";
+    32	    icmpTypeStrings[17]="Address Mask Request";
+    33	    icmpTypeStrings[18]="Address Mask Reply";
+    34	    icmpTypeStrings[19]="";
+    35	    icmpTypeStrings[20]="";
+    36	    icmpTypeStrings[21]="";
+    37	    icmpTypeStrings[22]="";
+    38	    icmpTypeStrings[23]="";
+    39	    icmpTypeStrings[24]="";
+    40	    icmpTypeStrings[25]="";
+    41	    icmpTypeStrings[26]="";
+    42	    icmpTypeStrings[27]="";
+    43	    icmpTypeStrings[28]="";
+    44	    icmpTypeStrings[29]="";
+    45	    icmpTypeStrings[30]="Traceroute";
+    46	    icmpTypeStrings[31]="Traceroute";
+    47	    icmpTypeStrings[32]="Traceroute";
+    48	    icmpTypeStrings[33]="Traceroute";
+    49	    icmpTypeStrings[34]="Traceroute";
+    50	    icmpTypeStrings[35]="Traceroute";
+    51	    icmpTypeStrings[36]="Traceroute";
+    52	    icmpTypeStrings[37]="Domain Name Request";
+    53	    icmpTypeStrings[38]="Domain Name Reply";
+    54	    icmpTypeStrings[39]="SKIP";
+    55	    icmpTypeStrings[40]="Photuris";
+    56	    unreachableCodeStrings[0]="Net Unreachable";
+    57	    unreachableCodeStrings[1]="Host Unreachable";
+    58	    unreachableCodeStrings[2]="Protocol Unreachable";
+    59	    unreachableCodeStrings[3]="Port Unreachable";
+    60	    unreachableCodeStrings[4]="Fragmentation Needed and Don't Fragment";
+    61	    unreachableCodeStrings[5]="Source Route Failed";
+    62	    unreachableCodeStrings[6]="Destination Network Unknown";
+    63	    unreachableCodeStrings[7]="Destination Host Unknown";
+    64	    unreachableCodeStrings[8]="Source Host Isolated";
+    65	    unreachableCodeStrings[10]="";
+    66	    unreachableCodeStrings[11]="";
+    67	    unreachableCodeStrings[12]="";
+    68	    unreachableCodeStrings[13]="";
+    69	    unreachableCodeStrings[14]="";
+    70	    unreachableCodeStrings[15]="";
+    71	  }
+    72	  private int icmpType;
+    73	  private int icmpCode;
+    74	  private int cksum;
+    75	  private long dAddress;
+    76	  private long dPreference;
+    77	  private long unused;
+    78	  private byte[] data;
+    79	  private int id  = -1;
+    80	  private int seq = -1;
+    81	  private long ip;
+    82	
+    83	  public Provider 
+    84	  parse(PacketInputStream i, int length, String parserTag) throws Exception{
+    85	    setLength(length);
+    86	    setTag(parserTag);
+    87	    headerLength=0;
+    88	    /*
+    89	     * The default header size is 8 bytes
+    90	     */
+    91	    icmpType = i.readUnsignedByte();headerLength+=1;
+    92	    icmpCode = i.readUnsignedByte();headerLength+=1;
+    93	    cksum = i.readUnsignedShort();headerLength+=2;
+    94	    if (icmpType==3){
+    95	      unused=i.readUnsignedInt();headerLength+=4;
+    96	i.readUnsignedInt();headerLength+=4;
+    97	i.readUnsignedInt();headerLength+=4;
+    98	i.readUnsignedInt();headerLength+=4;
+    99	i.readUnsignedInt();headerLength+=4;
+   100	i.readUnsignedInt();headerLength+=4;
+   101	i.readUnsignedInt();headerLength+=4;
+   102	i.readUnsignedInt();headerLength+=4;
+   103	    } else
+   104	    if (icmpType==9){
+   105	i.readUnsignedInt();headerLength+=4;
+   106	//This is Router Discovery and requires some work to learn the length
+   107	i.readUnsignedInt();headerLength+=4;
+   108	    }else 
+   109	    if (icmpType==10){
+   110	      dAddress=i.readUnsignedInt();headerLength+=4;
+   111	      dPreference=i.readUnsignedInt();headerLength+=4;
+   112	    }else 
+   113	    if (icmpType==17){
+   114	i.readUnsignedInt();headerLength+=4;
+   115	i.readUnsignedInt();headerLength+=4;
+   116	    }else 
+   117	    if (icmpType==18){
+   118	i.readUnsignedInt();headerLength+=4;
+   119	i.readUnsignedInt();headerLength+=4;
+   120	    }else 
+   121	    if ((icmpType==0)||(icmpType==8)||(icmpType==13)||(icmpType==14)||(icmpType==17)||(icmpType==18)){
+   122	      id  = i.readUnsignedShort();headerLength+=2;
+   123	      seq = i.readUnsignedShort();headerLength+=2;
+   124	    }
+   125	    int messageLength=getLength()-headerLength;
+   126	    data = new byte[messageLength];
+   127	    i.readFully(data);
+   128	// Presumably the messageLength is 0 //JDHI
+   129	    setMessageLength(0);
+   130	    setMessageTag(null);
+   131	    return this;
+   132	  }
+   133	
+   134	  public String providerReport(String type) throws Exception{
+   135	    StringBuffer b=new StringBuffer();
+   136	    b.append("icmpType:");
+   137	    if (icmpType < icmpTypeStrings.length){
+   138	      b.append(icmpTypeStrings[icmpType]);
+   139	    } else {
+   140	      b.append(icmpType);
+   141	    }
+   142	    b.append(" ");
+   143	    b.append("icmpCode:");
+   144	    if ((icmpType==3)&(icmpCode < unreachableCodeStrings.length)){
+   145	      b.append(unreachableCodeStrings[icmpCode]);
+   146	    } else {
+   147	      b.append(icmpCode);
+   148	    }
+   149	    if ((icmpType==0)||(icmpType==8)||(icmpType==13)||(icmpType==14)||(icmpType==17)||(icmpType==18)){
+   150	      b.append(" ");
+   151	      b.append("id:");
+   152	      b.append(id);
+   153	      b.append(" ");
+   154	      b.append("seq:");
+   155	      b.append(seq);
+   156	      b.append("\n");
+   157	    }
+   158	    if (data.length>0){
+   159	      b.append(" length:"+data.length+"\n");
+   160	      b.append(DumpHex.dumpBytes(data));
+   161	    }
+   162	    return b.toString();
+   163	  }
+   164	}

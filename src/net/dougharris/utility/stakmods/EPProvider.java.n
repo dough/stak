@@ -1,0 +1,71 @@
+     1	package net.dougharris.utility.stakmods;
+     2	
+     3	import net.dougharris.utility.PacketInputStream;
+     4	import net.dougharris.utility.DumpHex;
+     5	import java.io.IOException;
+     6	import java.io.EOFException;
+     7	
+     8	public class EPProvider extends GenericProvider{
+     9	  private byte[] src = new byte[6];   
+    10	  private byte[] dst = new byte[6];   
+    11	  private int tylen;
+    12	  private boolean isIEEE;
+    13	  private int dsap;
+    14	  private int ssap;
+    15	  private int control;
+    16	  private byte[] oui = new byte[3];
+    17	private int nAvailable;//JDH
+    18	
+    19	  public Provider parse(PacketInputStream i, int length, String parserTag) throws Exception{
+    20	nAvailable=i.available();
+    21	    setLength(length);
+    22	    setTag(parserTag);
+    23	    headerLength=0;
+    24	    i.readFully(dst);headerLength+=dst.length;
+    25	    i.readFully(src);headerLength+=src.length;
+    26	    tylen=i.readUnsignedShort();headerLength+=2;
+    27	    /**
+    28	     * Here is where we decide the user
+    29	    */
+    30	    if (isIEEE=(tylen <1537)){
+    31	      parsedLength=tylen;
+    32	      dsap = i.readUnsignedByte();headerLength+=1;
+    33	      ssap = i.readUnsignedByte();headerLength+=1;
+    34	      control = i.readUnsignedByte();headerLength+=1;
+    35	      i.readFully(oui);headerLength+=oui.length;
+    36	      if ((dsap== 66)&&(ssap==66)){
+    37	       parsedTag="raw";       
+    38	      }
+    39	    } else {
+    40	      parsedLength=getLength()-headerLength;//JDH not 14, think of 802.11
+    41	      if (tylen == 2048){
+    42	        parsedTag="ip";
+    43	      } else if (tylen == 2054){
+    44	        parsedTag="arp";
+    45	      } else if (tylen == 33079){
+    46	        parsedTag="IPX";
+    47	      } else parsedTag="raw";
+    48	    }
+    49	    String uSrc=DumpHex.bytesPrint(src);
+    50	    String dSrc=DumpHex.bytesPrint(dst);
+    51	    String messageTag = parsedTag+":"+uSrc+":"+dSrc;
+    52	    setMessageLength(parsedLength);
+    53	    setMessageTag(messageTag);
+    54	    return this;
+    55	  } 
+    56	
+    57	  public String providerReport(String type) throws Exception{
+    58	    StringBuffer b = new StringBuffer();
+    59	b.append("Available bytes:");
+    60	b.append(nAvailable);
+    61	b.append("\n");
+    62	    b.append("src:");
+    63	    b.append(DumpHex.separatedHexPrint(src));
+    64	    b.append(" dst:");
+    65	    b.append(DumpHex.separatedHexPrint(dst));
+    66	    b.append(" ");
+    67	    b.append(isIEEE?"length: ":"type: ");
+    68	    b.append(tylen);
+    69	    return b.toString();
+    70	  }
+    71	}

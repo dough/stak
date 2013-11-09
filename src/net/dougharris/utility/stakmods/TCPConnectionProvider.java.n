@@ -1,0 +1,262 @@
+     1	package net.dougharris.utility.stakmods;
+     2	
+     3	import net.dougharris.utility.PacketInputStream;
+     4	import net.dougharris.utility.DumpHex;
+     5	import java.io.EOFException;
+     6	import java.io.IOException;
+     7	import java.util.Hashtable;
+     8	import java.util.ArrayList;
+     9	
+    10	public class TCPConnectionProvider extends GenericProvider{
+    11	  private static Hashtable synseq = new Hashtable();
+    12	  private String srcHost;
+    13	  private String dstHost;
+    14	  private int sPort;
+    15	  private int dPort;
+    16	  private String srcPort; //in hex
+    17	  private String dstPort; //in hex
+    18	  private long seqN;
+    19	  private long ackN;
+    20	  private int offset; // how many 4-byte in header
+    21	  private int optionLength;
+    22	  private byte[] options;
+    23	  private int reserved;
+    24	  private int flagword;
+    25	  private int flags;
+    26	  private boolean urg;
+    27	  private boolean ack;
+    28	  private boolean psh;
+    29	  private boolean rst;
+    30	  private boolean syn;
+    31	  private boolean fin;
+    32	  private int window;
+    33	  private int chksum;
+    34	  private int urgent;
+    35	  private int messageLength;
+    36	  private boolean showOptions=false;
+    37	  private String connection;
+    38	  private String connectrev;
+    39	  boolean connected;
+    40	
+    41	  public Provider parse(PacketInputStream i, int length, String parserTag) throws Exception{
+    42	    setLength(length);
+    43	    setTag(parserTag);
+    44	    headerLength=0;
+    45	    sPort = i.readUnsignedShort();headerLength+=2;
+    46	    dPort = i.readUnsignedShort();headerLength+=2;
+    47	    seqN  = i.readUnsignedInt();headerLength+=4;
+    48	    ackN  = i.readUnsignedInt();headerLength+=4;
+    49	    flagword = i.readUnsignedShort();headerLength+=2;
+    50	    offset =   (flagword&0x0000f000)>>12;
+    51	    optionLength = (offset*4) - 20;
+    52	    window = i.readUnsignedShort();headerLength+=2;
+    53	    chksum = i.readUnsignedShort();headerLength+=2;
+    54	    urgent = i.readUnsignedShort();headerLength+=2;
+    55	    if (optionLength >0){
+    56	      options = new byte[optionLength];
+    57	      i.readFully(options);headerLength+=options.length;
+    58	    }
+    59	    setMessageLength(getLength()-headerLength);
+    60	
+    61	    reserved = (flagword&0x00000fc0)>>06;
+    62	    flags    = (flagword&0x00000c3f)>>00;
+    63	    urg = (32==(flags&0x00000020));
+    64	    ack = (16==(flags&0x00000010));
+    65	    psh = (8==(flags&0x00000008));
+    66	    rst = (4==(flags&0x00000004));
+    67	    syn = (2==(flags&0x00000002));
+    68	    fin = (1==(flags&0x00000001));
+    69	
+    70	    ArrayList tags = new ArrayList();
+    71	    tags = GenericProvider.parseTags(getTag());
+    72	    srcHost = (String)tags.get(1);
+    73	    dstHost = (String)tags.get(2);
+    74	    srcPort = DumpHex.shortPrint((short)sPort);
+    75	    dstPort = DumpHex.shortPrint((short)dPort);
+    76	    connection = srcHost+":"+srcPort+"-"+dstHost+":"+dstPort;
+    77	    connectrev = dstHost+":"+dstPort+"-"+srcHost+":"+srcPort;
+    78	    Object isn;
+    79	    long offset;
+    80	    Connection current;
+    81	    if (syn){
+    82	      if (null!=(current=(Connection)synseq.get(connectrev))){
+    83	      // then this syn is from the passive peer
+    84	        current.setPassiveName(connection);
+    85	        current.setPassiveSeq(seqN);
+    86		current.halfOpen=false;
+    87	      } else {
+    88	        synseq.put(connection, new Connection(seqN, connection));
+    89	      }
+    90	    } 
+    91	    if (null!=(current=(Connection)synseq.get(connection))){
+    92	    //I am active
+    93	      offset = current.getActiveSeq();
+    94	      seqN -= offset;
+    95	      offset = current.getPassiveSeq();
+    96	      ackN -= offset;
+    97	    } else
+    98	    //I am passive
+    99	    if (null!=(current=(Connection)synseq.get(connectrev))){
+   100	      offset = current.getPassiveSeq();
+   101	      seqN -= offset;
+   102	      offset = current.getActiveSeq();
+   103	      ackN -= offset;
+   104	    }
+   105	//JDH need to think this through - you need both of them before removing
+   106	// probably set something to null or 0 and only remove if both are gone!
+   107	    if (fin){
+   108	      if (null==(current=(Connection)synseq.get(connection))){
+   109	        if (null!=(current=(Connection)synseq.get(connectrev))){
+   110		  current.halfClosed=true;
+   111		}
+   112	      }
+   113	      if (current!=null){
+   114	        if (current.halfClosed){
+   115	          synseq.remove(connection);
+   116		}
+   117	      }
+   118	    }
+   119	
+   120	    // At the moment we recognize only HTTP and SMTP on top of TCP
+   121	    /**
+   122	     *  Here are what it can parse
+   123	     *  SMTP server - delivers to SMTP server
+   124	     *  SMTP client - not sure what to do
+   125	     *  HTTP server - delivers to HTTP server
+   126	     *  HTTP client - not sure what to do
+   127	     */
+   128	    parsedTag=null;
+   129	    if(sPort == 25){
+   130	      parsedTag="SMTP:Server ";
+   131	    } else
+   132	    if(dPort == 25){
+   133	      parsedTag="SMTP:Client ";
+   134	    } else
+   135	    if(sPort == 80){
+   136	      parsedTag="http:Server ";
+   137	    } else
+   138	    if(dPort == 80){
+   139	      parsedTag="http:Client ";
+   140	    } else {
+   141	      parsedTag="raw";
+   142	    }
+   143	    String messageTag = parsedTag+":"+sPort+":"+dPort;
+   144	
+   145	    setMessageTag(messageTag);
+   146	    return this;
+   147	  }
+   148	
+   149	  public String providerReport(String type) throws Exception{
+   150	    StringBuffer b=new StringBuffer();
+   151	    b.append("     ");
+   152	    b.append("src:");
+   153	    b.append(sPort);
+   154	    b.append(" dst:");
+   155	    b.append(dPort);
+   156	    b.append(" ");
+   157	    b.append(psh?"P":" ");
+   158	    b.append(urg?"U":" ");
+   159	    b.append(syn?"S":" ");
+   160	    b.append(ack?"A":" ");
+   161	    b.append(fin?"F":" ");
+   162	    b.append(rst?"R":" ");
+   163	    b.append(" ");
+   164	    b.append("s:");
+   165	    b.append(seqN);
+   166	    b.append(" l:");
+   167	    b.append(getMessageLength());
+   168	    b.append(" a:");
+   169	    b.append(ackN);
+   170	    b.append(" w:");
+   171	    b.append(window);
+   172	    b.append(" ");
+   173	    if (urg) b.append("U ");
+   174	    if (psh) b.append("P ");
+   175	    /*
+   176	    b.append("\nchecksum: ");
+   177	    b.append(DumpHex.shortPrint((short)chksum));
+   178	    if (urg){
+   179	      b.append("\nurgent: ");
+   180	      b.append(urgent);
+   181	    }
+   182	    */
+   183	    if (showOptions&&optionLength>0){
+   184	      b.append("\n");
+   185	      b.append("Options of length ");
+   186	      b.append(optionLength);
+   187	        for (int j=0;j<optionLength;j++){
+   188	        int kind = options[j];
+   189	        b.append(":kind-");
+   190	        b.append(kind);
+   191	        b.append(" ");
+   192	        switch(kind){
+   193	        case 0:
+   194	          j=optionLength;
+   195	        break;
+   196	        case 1:
+   197	          b.append("NOP");
+   198	        break;
+   199	        case 2:
+   200	          j++;
+   201	          j++;
+   202	          int mss = 256*(options[j]+((options[j]<0)?256:0)); 
+   203	          j++;
+   204	          mss += options[j]+((options[j]<0)?256:0); 
+   205	          b.append("MSS=");
+   206	          b.append(mss);
+   207	        break;
+   208	        case 4:
+   209	          b.append("SACK");
+   210	          j++; // skip the length byte
+   211	        break;
+   212	        default:
+   213	          j++;
+   214	          int skip = options[j];
+   215	          for(int k = 0;k<skip;k++){
+   216	            j++;
+   217	          }
+   218	          b.append("skipped length "+skip);
+   219	        }
+   220	      }
+   221	    }
+   222	    return b.toString();
+   223	  }
+   224	
+   225	  class Connection{
+   226	    private long[]   initialSeqs  = new long[2];
+   227	    private String[] connectNames = new String[2];
+   228	    private boolean halfOpen;
+   229	    private boolean halfClosed;
+   230	
+   231	    Connection(long initialSeq, String connectName){
+   232	      initialSeqs[0]  = initialSeq;
+   233	      connectNames[0] = connectName;
+   234	      halfOpen=true;
+   235	      halfClosed=false;
+   236	    }
+   237	
+   238	    private long getActiveSeq(){
+   239	      return initialSeqs[0];
+   240	    }
+   241	
+   242	    private long getPassiveSeq(){
+   243	      return initialSeqs[1];
+   244	    }
+   245	
+   246	    private void setPassiveSeq(long seq){
+   247	      initialSeqs[1]=seq;
+   248	    }
+   249	
+   250	    private String getActiveName(){
+   251	      return connectNames[0];
+   252	    }
+   253	
+   254	    private String getPassiveName(){
+   255	      return connectNames[1];
+   256	    }
+   257	
+   258	    private void setPassiveName(String name){
+   259	      connectNames[1]=name;
+   260	    }
+   261	  }
+   262	}

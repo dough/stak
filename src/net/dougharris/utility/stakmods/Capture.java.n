@@ -1,0 +1,197 @@
+     1	package net.dougharris.utility.stakmods;
+     2	
+     3	import net.dougharris.utility.P;
+     4	import net.dougharris.utility.PacketInputStream;
+     5	import net.dougharris.utility.UnsignedInputStream;
+     6	import net.dougharris.utility.DumpHex;
+     7	import net.dougharris.utility.stakmods.Provider;
+     8	import net.dougharris.utility.stakmods.GenericProvider;
+     9	import net.dougharris.utility.stakmods.*;
+    10	
+    11	import java.io.File;
+    12	import java.io.FileWriter;
+    13	import java.io.PrintWriter;
+    14	import java.io.InputStream;
+    15	import java.io.FileInputStream;
+    16	import java.io.BufferedInputStream;
+    17	import java.io.BufferedWriter;
+    18	import java.io.OutputStream;
+    19	import java.io.FileOutputStream;
+    20	import java.io.OutputStreamWriter;
+    21	import java.io.FileNotFoundException;
+    22	import java.io.IOException;
+    23	import java.io.EOFException;
+    24	import java.io.Serializable;
+    25	import java.util.Date;
+    26	import java.util.HashMap;
+    27	import java.util.Set;
+    28	import java.util.Properties;
+    29	import java.util.Enumeration; // Change this, it is only for one property file
+    30	import java.util.Iterator;
+    31	import java.util.StringTokenizer;
+    32	import java.util.ArrayList;
+    33	
+    34	import java.util.logging.Logger;
+    35	import java.util.logging.Formatter;
+    36	import java.util.logging.Level;
+    37	import java.util.logging.Handler;
+    38	import java.util.logging.LogRecord;
+    39	
+    40	public  class Capture implements Serializable{
+    41	//    String captureString;;
+    42	    long timeStamp;
+    43	    int captureNumber;
+    44	    long captureLength;
+    45	    long totalLength;
+    46	    Provider[] providerArray;
+    47	transient boolean bigEndian;
+    48	transient  long snaplen;
+    49	transient String linkTag;
+    50	transient ArrayList  providerList =  new ArrayList();
+    51	transient HashMap providers;
+    52	
+    53	    public Capture(int captureNumber, boolean bigEndian, long snaplen, String linkTag, HashMap providers){
+    54	      this.captureNumber=captureNumber;
+    55	      this.bigEndian=bigEndian;
+    56	      this.snaplen=snaplen;
+    57	      this.linkTag=linkTag;
+    58	      this.providers=providers;
+    59	    }
+    60	
+    61	    public long getTimeStamp(){
+    62	      return this.timeStamp;
+    63	    }
+    64	
+    65	    public int getNumber(){
+    66	      return this.captureNumber;
+    67	    }
+    68	
+    69	    public long getCaptureLength(){
+    70	      return this.captureLength;
+    71	    }
+    72	
+    73	    public long getTotalLength(){
+    74	      return this.totalLength;
+    75	    }
+    76	
+    77	    public void 
+    78	    parseCapture(UnsignedInputStream captureStream) throws IOException, EOFException{
+    79	System.err.println("entered parseCapture");
+    80	      byte[] capturedBytes=null;
+    81	      long sec  = captureStream.readUnsignedInt(bigEndian);
+    82	      long usec = captureStream.readUnsignedInt(bigEndian);
+    83	      captureLength = captureStream.readUnsignedInt(bigEndian);
+    84	System.err.println("  got captureLength:"+captureLength);
+    85	      if (captureLength > snaplen){
+    86	System.err.println("captureLength is greater than snaplen");//JDH
+    87	        throw new EOFException();
+    88	      }
+    89	      //JDH QUESTIONthis.totalLength   = dumpStream.readUnsignedInt(bigEndian);
+    90	      this.totalLength   = captureStream.readUnsignedInt(bigEndian);
+    91	      this.timeStamp = sec*1000000+usec;
+    92	      capturedBytes= new byte[(int)captureLength];
+    93	      captureStream.readFully(capturedBytes);
+    94	      //captureString = parsePacketStack(capturedBytes);
+    95	System.err.println("  starting to parsePacketStack-");
+    96	      parsePacketStack(capturedBytes);
+    97	    }//end parse of Capture
+    98	
+    99	    public void parsePacketStack(byte[] capturedBytes){
+   100	PacketInputStream i;
+   101	Provider p;
+   102	String pTag;
+   103	String pKey;
+   104	int pLength;
+   105	//JDH reporting stuff String reportType;
+   106	//JDH reporting stuff     StringBuffer b;
+   107	//JDH reporting stuff      b = new StringBuffer();
+   108	
+   109	      pTag=linkTag;
+   110	      i= new PacketInputStream(capturedBytes);
+   111	      pLength = (int)getCaptureLength();
+   112	/*
+   113	If pTag is null then we do nothing, and do not go up the parse stack.
+   114	This is the only way to keep from going up
+   115	And this is the only place where you can go up
+   116	*/
+   117	      while(null !=pTag){
+   118		pKey=(String)(GenericProvider.parseTags(pTag)).get(0);
+   119	        p= (Provider)providers.get(pKey);
+   120		/*
+   121		 * The p just returned should never be null
+   122	         * because we should be using only tags that
+   123	         are in the approved list
+   124		 */
+   125	        if (p==null){
+   126	          System.exit(2);
+   127	        }
+   128	/**
+   129	This is really the central point of the whole thing.
+   130	Here we have for example p as an IPProvider which 
+   131	sets its length to pLength and uses pTag to parse
+   132	and when it has done will have set its pTag to begin
+   133	with the appropriate key for the next parse, that is,
+   134	the User which should now become the Provider.
+   135	
+   136	In particular it will set the MessageType and the MessageLength
+   137	to be used by the next Provider.
+   138	*/
+   139		try{
+   140	          p= p.parse(i, pLength, pTag); 
+   141	 	}catch(Exception x){
+   142	          System.exit(4);
+   143		}
+   144		providerList.add(p);
+   145	/* JDH reporting stuff
+   146		reportType="regular";
+   147		if (shortProviders.containsKey(pKey)){
+   148		  reportType="short";
+   149		}
+   150		if (dropProviders.containsKey(pKey)){
+   151		  reportType="drop";
+   152		}
+   153	        b.append(p.toString("regular"));
+   154	reporting stuff	JDH*/
+   155	
+   156		pTag=p.getMessageTag();
+   157		pLength=p.getMessageLength();
+   158		/*JDH only for logging
+   159	cmdArgs.fine(
+   160	  "P:"+p.getTag()+"@"+p.getLength()+
+   161	  " becomes "+
+   162	  "P:"+p.getMessageTag()+"@"+p.getMessageLength()
+   163	);
+   164	JDH*/
+   165	      } //looping on pTag
+   166	      //turn providerList into an array
+   167	Provider[] sample=new Provider[0];
+   168	      providerArray = (Provider[])providerList. toArray(sample);
+   169	    }
+   170	
+   171	    public String toString(){
+   172	      StringBuffer b=new StringBuffer();
+   173	      b.append("  CAPTURE-");
+   174	      b.append(DumpHex.decPrint(getNumber()));
+   175	      b.append(" ");
+   176	      b.append(captureLength);
+   177	      b.append("/");
+   178	      b.append(totalLength);
+   179	      b.append("\n");
+   180	      b.append("Number of providers is  ");
+   181	      b.append(providerArray.length);
+   182	      b.append("\n");
+   183	for (int j=0;j<providerArray.length;j++){
+   184	  //JDHb.append(providerArray[j]);
+   185	try{
+   186	  //b.append(providerArray[j].providerReport("regular"));
+   187	  //System.err.println((Provider)providerArray[j].toString());
+   188	  b.append(providerArray[j].toString());
+   189	}catch(Exception x){
+   190	  System.err.println("x");
+   191	}
+   192	  b.append("\n");
+   193	}
+   194	      b.append("\n");
+   195	      return b.toString();
+   196	    }
+   197	  }//end Capture definition
